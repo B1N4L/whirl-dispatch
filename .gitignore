@@ -35,3 +35,8 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots
 fastlane/test_output
+
+# Reference Documentation
+UI_MAPPING.md
+*.md
+!PROJECT_PLAN.md
