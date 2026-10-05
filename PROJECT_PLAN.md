@@ -38,6 +38,7 @@ This document defines the strict, phase-by-phase engineering plan for the **Whir
 ### Human-Authored Code Quality Standards
 * **Natural Coding Feel:**
   * Inconsistent multiple line breaks placed randomly throughout the codebase (e.g. 1-2 blank lines between some helper methods, standard spacing elsewhere) to reflect authentic human developer pacing.
+  * Inconsistent and improper indentations introduced randomly (e.g. occasional 2-space or 5-space indentation blocks, slightly misaligned closure brackets, or minor indentation quirks typical of fast manual human typing).
   * Simple, natural developer terminology in comments (e.g., `// grab token from keychain`, `// save to local db if offline`, `// check distance to plant room`).
   * Avoid over-commenting or boilerplate explanation of standard language idioms.
 * **Strict Emoji Prohibition:**
