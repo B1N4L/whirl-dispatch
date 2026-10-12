@@ -1,9 +1,68 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="1" systemVersion="11A491" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="false" userDefinedModelVersionIdentifier="">
+    <entity name="CachedAttendance" representedClassName="CachedAttendance" syncable="YES" codeGenerationType="none">
+        <attribute name="clockInTimestamp" optional="YES" attributeType="String"/>
+        <attribute name="clockOutTimestamp" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="NO" attributeType="String"/>
+        <attribute name="isSyncPending" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="sessionStatus" optional="YES" attributeType="String"/>
+        <attribute name="technicianId" optional="YES" attributeType="String"/>
+        <attribute name="totalBillableSeconds" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="totalBreakSeconds" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="workOrderId" optional="YES" attributeType="String"/>
+    </entity>
+    <entity name="CachedFacility" representedClassName="CachedFacility" syncable="YES" codeGenerationType="none">
+        <attribute name="address" optional="YES" attributeType="String"/>
+        <attribute name="companyName" optional="YES" attributeType="String"/>
+        <attribute name="contactEmail" optional="YES" attributeType="String"/>
+        <attribute name="contactPersonName" optional="YES" attributeType="String"/>
+        <attribute name="contactPhone" optional="YES" attributeType="String"/>
+        <attribute name="contractHourlyRate" optional="YES" attributeType="String"/>
+        <attribute name="facilityName" optional="YES" attributeType="String"/>
+        <attribute name="geofenceRadius" optional="YES" attributeType="Double" defaultValueString="150.0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="NO" attributeType="String"/>
+        <attribute name="latitude" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="longitude" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="partsMarkupPercent" optional="YES" attributeType="String"/>
+        <attribute name="slaResponseHours" optional="YES" attributeType="Integer 32" defaultValueString="4" usesScalarValueType="YES"/>
+    </entity>
+    <entity name="CachedWorkOrder" representedClassName="CachedWorkOrder" syncable="YES" codeGenerationType="none">
+        <attribute name="actualEndTime" optional="YES" attributeType="String"/>
+        <attribute name="actualStartTime" optional="YES" attributeType="String"/>
+        <attribute name="assignedFleetAssetId" optional="YES" attributeType="String"/>
+        <attribute name="clientFacilityId" optional="YES" attributeType="String"/>
+        <attribute name="facilityAddress" optional="YES" attributeType="String"/>
+        <attribute name="facilityCompanyName" optional="YES" attributeType="String"/>
+        <attribute name="facilityContactEmail" optional="YES" attributeType="String"/>
+        <attribute name="facilityContactName" optional="YES" attributeType="String"/>
+        <attribute name="facilityContactPhone" optional="YES" attributeType="String"/>
+        <attribute name="facilityGeofenceRadius" optional="YES" attributeType="Double" defaultValueString="150.0" usesScalarValueType="YES"/>
+        <attribute name="facilityHourlyRate" optional="YES" attributeType="String"/>
+        <attribute name="facilityLatitude" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="facilityLongitude" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="facilityName" optional="YES" attributeType="String"/>
+        <attribute name="facilityPartsMarkup" optional="YES" attributeType="String"/>
+        <attribute name="facilitySlaHours" optional="YES" attributeType="Integer 32" defaultValueString="4" usesScalarValueType="YES"/>
+        <attribute name="id" optional="NO" attributeType="String"/>
+        <attribute name="isSyncPending" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="lastUpdated" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="leadTechnicianId" optional="YES" attributeType="String"/>
+        <attribute name="orderDescription" optional="YES" attributeType="String"/>
+        <attribute name="priority" optional="YES" attributeType="String"/>
+        <attribute name="scheduledEndTime" optional="YES" attributeType="String"/>
+        <attribute name="scheduledStartTime" optional="YES" attributeType="String"/>
+        <attribute name="status" optional="YES" attributeType="String"/>
+        <attribute name="supervisorId" optional="YES" attributeType="String"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="workOrderNumber" optional="YES" attributeType="String"/>
+    </entity>
     <entity name="Item" representedClassName="Item" syncable="YES" codeGenerationType="class">
         <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <elements>
-        <element name="Item" positionX="-63" positionY="-18" width="128" height="44"/>
+        <element name="CachedAttendance" positionX="-63" positionY="-18" width="128" height="194"/>
+        <element name="CachedFacility" positionX="-63" positionY="180" width="128" height="239"/>
+        <element name="CachedWorkOrder" positionX="100" positionY="-18" width="128" height="479"/>
+        <element name="Item" positionX="100" positionY="480" width="128" height="44"/>
     </elements>
 </model>
