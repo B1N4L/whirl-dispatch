@@ -14,7 +14,7 @@ struct whirl_dispatch_appApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootCoordinatorView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
         }
     }
