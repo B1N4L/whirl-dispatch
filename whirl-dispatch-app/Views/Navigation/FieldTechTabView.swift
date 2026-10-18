@@ -32,42 +32,11 @@ struct FieldTechTabView: View {
 
             TabView(selection: $selectedTab) {
                 // tab 1: work orders dispatch feed
-                NavigationStack {
-                    VStack {
-                        Spacer()
-                        Image(systemName: "wrench.and.screwdriver.fill")
-                            .font(.system(size: 48))
-                            .foregroundColor(Color.accentBlue)
-                        Text("Active Work Orders Feed")
-                            .font(.appHeadline)
-                            .padding(.top, 8)
-                        Text("Select a dispatched job to inspect details")
-                            .font(.appSubheadline)
-                            .foregroundColor(.secondary)
-                        Spacer()
+                WorkOrderListView()
+                    .tabItem {
+                        Label("Work Orders", systemImage: "wrench.and.screwdriver.fill")
                     }
-                    .navigationTitle("Dispatched Jobs")
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            if let role = authVM.currentUser?.role {
-                                Text(role.displayName)
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(Color.brandNavy)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color.brandNavy.opacity(0.12))
-                                    )
-                            }
-                        }
-                    }
-                }
-                .tabItem {
-                    Label("Work Orders", systemImage: "wrench.and.screwdriver.fill")
-                }
-                .tag(0)
+                    .tag(0)
 
 
                 // tab 2: site attendance and clock-in
