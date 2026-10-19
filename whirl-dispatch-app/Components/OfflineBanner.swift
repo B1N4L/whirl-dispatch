@@ -39,9 +39,9 @@ struct OfflineBanner: View {
             Spacer()
 
 
-            if !isOffline && pendingCount > 0, let onSync = onSync {
+            if pendingCount > 0, let onSync = onSync {
                 Button(action: onSync) {
-                    Text("Sync Now")
+                    Text(isOffline ? "Sync Queued" : "Sync Now")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
@@ -49,7 +49,7 @@ struct OfflineBanner: View {
                         .padding(.vertical, 5)
                         .background(
                             Capsule()
-                                .fill(Color.accentBlue)
+                                .fill(isOffline ? Color.statusAmber : Color.accentBlue)
                         )
                 }
                 .accessibilityLabel("Sync queued changes to server")

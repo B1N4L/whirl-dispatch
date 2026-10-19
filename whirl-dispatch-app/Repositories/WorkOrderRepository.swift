@@ -22,8 +22,13 @@ final class WorkOrderRepository: @unchecked Sendable {
     }
 
 
-    // try remote fetch first, fallback to core data if plant room basement has no signal
+    // try remote fetch first, fallback to core data if plant room basement has no signal or offline mode is engaged
     func fetchWorkOrders() async -> (orders: [WorkOrder], isOffline: Bool, error: String?) {
+      if OfflineModeManager.shared.isPlantRoomOffline {
+          let cachedOrders = await offlineStorage.fetchCachedWorkOrders()
+          return (cachedOrders, true, nil)
+      }
+
       do {
           let remoteOrders: [WorkOrder] = try await apiService.send(.getWorkOrders)
 
@@ -46,6 +51,11 @@ final class WorkOrderRepository: @unchecked Sendable {
 
     // get details for work order
     func fetchWorkOrderDetail(id: String) async -> (order: WorkOrder?, isOffline: Bool) {
+        if OfflineModeManager.shared.isPlantRoomOffline {
+            let cached = await offlineStorage.fetchCachedWorkOrder(id: id)
+            return (cached, true)
+        }
+
         do {
             let remote: WorkOrder = try await apiService.send(.getWorkOrderDetail(id: id))
             await offlineStorage.upsertWorkOrders([remote])
@@ -59,6 +69,11 @@ final class WorkOrderRepository: @unchecked Sendable {
 
     // update status with optimistic offline fallback
     func updateStatus(id: String, status: WorkOrderStatus) async -> (success: Bool, isOffline: Bool) {
+      if OfflineModeManager.shared.isPlantRoomOffline {
+          await offlineStorage.updateWorkOrderStatus(id: id, status: status, isSyncPending: true)
+          return (true, true)
+      }
+
       do {
           let _: WorkOrder = try await apiService.send(.updateWorkOrderStatus(id: id, status: status.rawValue))
           await offlineStorage.updateWorkOrderStatus(id: id, status: status, isSyncPending: false)

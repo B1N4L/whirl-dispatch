@@ -14,7 +14,9 @@ struct WorkOrderDetailView: View {
 
     @State private var isPerformingTransition = false
     @State private var showingCompleteAlert = false
+    @State private var showingRestrictionAlert = false
     @State private var actionErrorMessage: String? = nil
+    @State private var offlineManager = OfflineModeManager.shared
 
 
     var body: some View {
@@ -187,6 +189,67 @@ struct WorkOrderDetailView: View {
                 .padding(.horizontal, 16)
 
 
+                // option b: shielded plant room offline mode toggle
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Plant Room Connectivity")
+                        .font(.appSubheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.secondary)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .center) {
+                            Image(systemName: offlineManager.isPlantRoomOffline ? "shield.fill" : "antenna.radiowaves.left.and.right")
+                                .font(.system(size: 22))
+                                .foregroundColor(offlineManager.isPlantRoomOffline ? Color.statusAmber : Color.accentBlue)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Shielded Plant Room Mode")
+                                    .font(.appHeadline)
+                                    .fontWeight(.semibold)
+
+                                Text(offlineManager.isPlantRoomOffline ? "Operating in local Core Data cache" : "Connected to Live Vercel API")
+                                    .font(.appCaption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: Binding(
+                                get: { offlineManager.isPlantRoomOffline },
+                                set: { newValue in
+                                    let success = offlineManager.setPlantRoomOffline(enabled: newValue, for: order)
+                                    if !success {
+                                        showingRestrictionAlert = true
+                                    } else {
+                                        let haptic = UIImpactFeedbackGenerator(style: .medium)
+                                        haptic.impactOccurred()
+                                    }
+                                }
+                            ))
+                            .labelsHidden()
+                            .tint(Color.statusAmber)
+                        }
+
+                        if order.status != .onSiteActive && !offlineManager.isPlantRoomOffline {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.circle")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Text("Requires active on-site status to activate offline mode.")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.cardBackground)
+                    )
+                }
+                .padding(.horizontal, 16)
+
+
                 // lifecycle state transition action bar
                 VStack(spacing: 12) {
                     actionButtonForCurrentState()
@@ -209,6 +272,11 @@ struct WorkOrderDetailView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Confirm that all mechanical diagnostic checks and plant room cleaning are done.")
+        }
+        .alert("Offline Mode Restricted", isPresented: $showingRestrictionAlert) {
+            Button("Understood", role: .cancel) {}
+        } message: {
+            Text(offlineManager.restrictionErrorMessage ?? "You cannot enable offline mode outside the workplace site. You must arrive and clock in on-site first.")
         }
     }
 

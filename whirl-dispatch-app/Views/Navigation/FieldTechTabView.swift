@@ -10,22 +10,20 @@ import SwiftUI
 struct FieldTechTabView: View {
     @Bindable var authVM: AuthViewModel
     @State private var selectedTab: Int = 0
-    @State private var networkMonitor = NetworkMonitor.shared
-    @State private var pendingSyncCount: Int = 0
+    @State private var offlineManager = OfflineModeManager.shared
 
 
     var body: some View {
         VStack(spacing: 0) {
-            // show offline alert banner if network is disconnected in basement
-            if !networkMonitor.isConnected || pendingSyncCount > 0 {
+            // show offline alert banner if plant room mode is active or changes queued
+            if offlineManager.isPlantRoomOffline || offlineManager.pendingSyncCount > 0 {
                 OfflineBanner(
-                    isOffline: !networkMonitor.isConnected,
-                    pendingCount: pendingSyncCount
+                    isOffline: offlineManager.isPlantRoomOffline,
+                    pendingCount: offlineManager.pendingSyncCount
                 ) {
                     // manual sync trigger
                     Task {
-                        _ = await WorkOrderRepository.shared.syncPendingMutations()
-                        pendingSyncCount = await OfflineStorageService.shared.getPendingSyncCount()
+                        await offlineManager.syncPendingChanges()
                     }
                 }
             }
@@ -98,7 +96,7 @@ struct FieldTechTabView: View {
         }
         .task {
             // refresh sync pending count on load
-            pendingSyncCount = await OfflineStorageService.shared.getPendingSyncCount()
+            await offlineManager.refreshPendingCount()
         }
     }
 }

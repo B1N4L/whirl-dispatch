@@ -124,6 +124,7 @@ gitGraph
 | **Phase 6** | 6.2 | Oct 18, 2026 | 16:10:45 | `feat(work-orders): add work order card with priority badges and facility info` |
 | **Phase 6** | 6.3 | Oct 19, 2026 | 11:45:20 | `feat(work-orders): implement work order detail view with equipment specs` |
 | **Phase 6** | 6.4 | Oct 19, 2026 | 17:30:50 | `feat(work-orders): implement lifecycle state transitions accept travel work complete` |
+| **Phase 6** | 6.5 | Oct 19, 2026 | 19:15:30 | `fix(offline): replace network tracking with on-site plant room mode toggle` |
 | **Phase 7** | 7.1 | Oct 20, 2026 | 10:15:30 | `feat(attendance): build technician shift clock in dashboard with timer` |
 | **Phase 7** | 7.2 | Oct 20, 2026 | 15:40:10 | `feat(attendance): add pause shift break toggle and daily hours tally` |
 | **Phase 7** | 7.3 | Oct 21, 2026 | 14:20:35 | `feat(attendance): add historical shift log list with status chips` |
@@ -181,7 +182,7 @@ gitGraph
 ### Phase 4: Core Data Local Persistence & Offline Sync (Oct 12 – 14, 2026)
 * Core Data entities: `CachedWorkOrder`, `CachedFacility`, `CachedAttendance`.
 * `OfflineStorageService`: Background context saves to ensure zero UI lag.
-* Repository offline fallback: When the network is unreachable inside basements or plant rooms, work orders load from Core Data with an "Offline Mode" indicator.
+* Repository offline fallback: Technicians can explicitly switch to "Shielded Plant Room Mode" via a dedicated toggle in Work Order Detail when operating inside subterranean plant rooms. Strict validation ensures offline mode can only be activated while on-site.
 
 ### Phase 5: Multi-Device Role Navigation Shells (Oct 15 – 17, 2026)
 * `RootCoordinatorView`: Directs user based on role and horizontal size class.

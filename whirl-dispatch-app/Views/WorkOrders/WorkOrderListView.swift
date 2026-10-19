@@ -9,19 +9,20 @@ import SwiftUI
 
 struct WorkOrderListView: View {
     @State private var viewModel = WorkOrdersViewModel()
-    @State private var networkMonitor = NetworkMonitor.shared
+    @State private var offlineManager = OfflineModeManager.shared
 
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // show offline bar if network unreachable
-                if viewModel.isOffline || !networkMonitor.isConnected {
+                // show plant room offline banner when engaged
+                if offlineManager.isPlantRoomOffline || viewModel.isOffline {
                     OfflineBanner(
                         isOffline: true,
-                        pendingCount: 0
+                        pendingCount: offlineManager.pendingSyncCount
                     ) {
                         Task {
+                            await offlineManager.syncPendingChanges()
                             await viewModel.loadWorkOrders()
                         }
                     }
