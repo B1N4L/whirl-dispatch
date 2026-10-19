@@ -46,6 +46,20 @@ struct WorkOrderDetailView: View {
                 .padding(.top, 12)
 
 
+                // lifecycle state transition progress track
+                HStack(spacing: 4) {
+                    stepIndicator(title: "Dispatched", isDone: true, isActive: order.status == .dispatched)
+                    stepConnector(isDone: order.status != .dispatched)
+                    stepIndicator(title: "En Route", isDone: order.status == .enRoute || order.status == .onSiteActive || order.status == .completed, isActive: order.status == .enRoute)
+                    stepConnector(isDone: order.status == .onSiteActive || order.status == .completed)
+                    stepIndicator(title: "On-Site", isDone: order.status == .onSiteActive || order.status == .completed, isActive: order.status == .onSiteActive)
+                    stepConnector(isDone: order.status == .completed)
+                    stepIndicator(title: "Done", isDone: order.status == .completed, isActive: order.status == .completed)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 4)
+
+
                 // error banner if transition failed
                 if let err = actionErrorMessage {
                     ErrorBanner(message: err) {
@@ -290,5 +304,27 @@ struct WorkOrderDetailView: View {
               .fontWeight(.medium)
               .foregroundColor(.primary)
       }
+    }
+
+
+    // visual indicators for lifecycle stepper
+    private func stepIndicator(title: String, isDone: Bool, isActive: Bool) -> some View {
+        VStack(spacing: 3) {
+            Circle()
+                .fill(isDone ? Color.statusGreen : (isActive ? Color.accentBlue : Color.gray.opacity(0.3)))
+                .frame(width: 8, height: 8)
+            Text(title)
+                .font(.system(size: 9))
+                .fontWeight(isActive ? .bold : .regular)
+                .foregroundColor(isActive ? .primary : .secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func stepConnector(isDone: Bool) -> some View {
+        Rectangle()
+            .fill(isDone ? Color.statusGreen : Color.gray.opacity(0.3))
+            .frame(height: 2)
+            .padding(.bottom, 12)
     }
 }
