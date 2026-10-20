@@ -29,7 +29,7 @@ struct AttendanceRecord: Identifiable, Codable, Equatable {
     let workOrderId: String
     let technicianId: String
     let clockInTimestamp: String
-    let clockOutTimestamp: String?
+    var clockOutTimestamp: String?
    var totalBillableSeconds: Int
    var totalBreakSeconds: Int
     var sessionStatus: SessionStatus
@@ -43,6 +43,23 @@ struct AttendanceRecord: Identifiable, Codable, Equatable {
     var isCurrentlyOnSite: Bool {
         sessionStatus == .activeOnSite || sessionStatus == .clockedIn
     }
+}
+
+
+// response wrappers for attendance endpoints
+struct ClockInResponse: Codable {
+    let message: String?
+    let session: AttendanceRecord
+}
+
+struct ClockOutResponse: Codable {
+    let message: String?
+    let session: AttendanceRecord
+}
+
+struct AttendanceTimelineResponse: Codable {
+    let timeline: [AttendanceRecord]
+    let totalRecordedHours: Double?
 }
 
 

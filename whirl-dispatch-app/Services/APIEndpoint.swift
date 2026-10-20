@@ -28,7 +28,9 @@ enum APIEndpoint {
     case getWorkOrderDetail(id: String)
     case updateWorkOrderStatus(id: String, status: String)
    case clockIn(workOrderId: String, lat: Double, lng: Double)
-   case clockOut(attendanceId: String)
+   case clockOut(workOrderId: String, lat: Double, lng: Double)
+   case pauseBreak(workOrderId: String, lat: Double, lng: Double)
+   case getAttendanceHistory(workOrderId: String)
     case getExpenses
     case submitExpense(workOrderId: String, storeName: String, amount: String, lat: Double, lng: Double, invoiceNum: String)
     case approveExpense(id: String, status: String, reason: String?)
@@ -47,7 +49,9 @@ enum APIEndpoint {
         case .getWorkOrderDetail(let id): return "/work-orders/\(id)"
         case .updateWorkOrderStatus(let id, _): return "/work-orders/\(id)/status"
         case .clockIn: return "/attendance/clock-in"
-        case .clockOut(let id): return "/attendance/clock-out/\(id)"
+        case .clockOut: return "/attendance/clock-out"
+        case .pauseBreak: return "/attendance/boundary-event"
+        case .getAttendanceHistory(let workOrderId): return "/attendance/work-order/\(workOrderId)"
         case .getExpenses: return "/expenses"
         case .submitExpense: return "/expenses"
         case .approveExpense(let id, _, _): return "/expenses/\(id)/approve"
@@ -59,11 +63,11 @@ enum APIEndpoint {
 
     var method: HTTPMethod {
         switch self {
-        case .health, .getFacilities, .getFleet, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getBillingInvoices, .getDossier:
+        case .health, .getFacilities, .getFleet, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getBillingInvoices, .getDossier, .getAttendanceHistory:
             return .get
-        case .login, .clockIn, .submitExpense:
+        case .login, .clockIn, .clockOut, .pauseBreak, .submitExpense:
             return .post
-        case .updateWorkOrderStatus, .clockOut, .approveExpense, .saveDossier:
+        case .updateWorkOrderStatus, .approveExpense, .saveDossier:
             return .patch
         }
     }
@@ -99,9 +103,33 @@ enum APIEndpoint {
           let body: [String: Any] = [
               "workOrderId": workOrderId,
               "latitude": lat,
-              "longitude": lng
+              "longitude": lng,
+              "accuracyMeters": 5.0,
+              "biometricVerified": false
           ]
           request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+      case .clockOut(let workOrderId, let lat, let lng):
+          let body: [String: Any] = [
+              "workOrderId": workOrderId,
+              "latitude": lat,
+              "longitude": lng,
+              "accuracyMeters": 5.0
+          ]
+          request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+      case .pauseBreak(let workOrderId, let lat, let lng):
+          let body: [String: Any] = [
+              "workOrderId": workOrderId,
+              "eventType": "BREAK_PAUSED",
+              "latitude": lat,
+              "longitude": lng,
+              "accuracyMeters": 5.0
+          ]
+          request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+      case .getAttendanceHistory:
+          break
 
       case .submitExpense(let workOrderId, let storeName, let amount, let lat, let lng, let invoiceNum):
           let body: [String: Any] = [
