@@ -38,26 +38,11 @@ struct FieldTechTabView: View {
 
 
                 // tab 2: site attendance and clock-in
-                NavigationStack {
-                    VStack {
-                        Spacer()
-                        Image(systemName: "clock.badge.checkmark.fill")
-                            .font(.system(size: 48))
-                            .foregroundColor(Color.statusGreen)
-                        Text("Site Shift & Geofence")
-                            .font(.appHeadline)
-                            .padding(.top, 8)
-                        Text("Clock in within 150m radius of facility")
-                            .font(.appSubheadline)
-                            .foregroundColor(.secondary)
-                        Spacer()
+                AttendanceView()
+                    .tabItem {
+                        Label("Attendance", systemImage: "clock.badge.checkmark.fill")
                     }
-                    .navigationTitle("Site Attendance")
-                }
-                .tabItem {
-                    Label("Attendance", systemImage: "clock.badge.checkmark.fill")
-                }
-                .tag(1)
+                    .tag(1)
 
 
                 // tab 3: emergency field expenses
