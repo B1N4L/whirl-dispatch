@@ -32,7 +32,8 @@ enum APIEndpoint {
    case pauseBreak(workOrderId: String, lat: Double, lng: Double)
    case getAttendanceHistory(workOrderId: String)
     case getExpenses
-    case submitExpense(workOrderId: String, storeName: String, amount: String, lat: Double, lng: Double, invoiceNum: String)
+    case getExpensesByWorkOrder(workOrderId: String)
+    case submitExpense(workOrderId: String, vendorName: String, receiptNumber: String?, currency: String, receiptImageUrl: String, lat: Double, lng: Double, items: [[String: Any]])
     case approveExpense(id: String, status: String, reason: String?)
     case getBillingInvoices
     case getDossier(workOrderId: String)
@@ -53,8 +54,9 @@ enum APIEndpoint {
         case .pauseBreak: return "/attendance/boundary-event"
         case .getAttendanceHistory(let workOrderId): return "/attendance/work-order/\(workOrderId)"
         case .getExpenses: return "/expenses"
+        case .getExpensesByWorkOrder(let workOrderId): return "/expenses/work-order/\(workOrderId)"
         case .submitExpense: return "/expenses"
-        case .approveExpense(let id, _, _): return "/expenses/\(id)/approve"
+        case .approveExpense(let id, _, _): return "/expenses/\(id)/review"
         case .getBillingInvoices: return "/billing"
         case .getDossier(let workOrderId): return "/dossiers/\(workOrderId)"
         case .saveDossier(let workOrderId, _): return "/dossiers/\(workOrderId)"
@@ -63,7 +65,7 @@ enum APIEndpoint {
 
     var method: HTTPMethod {
         switch self {
-        case .health, .getFacilities, .getFleet, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getBillingInvoices, .getDossier, .getAttendanceHistory:
+        case .health, .getFacilities, .getFleet, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getExpensesByWorkOrder, .getBillingInvoices, .getDossier, .getAttendanceHistory:
             return .get
         case .login, .clockIn, .clockOut, .pauseBreak, .submitExpense:
             return .post
@@ -131,20 +133,26 @@ enum APIEndpoint {
       case .getAttendanceHistory:
           break
 
-      case .submitExpense(let workOrderId, let storeName, let amount, let lat, let lng, let invoiceNum):
-          let body: [String: Any] = [
+      case .submitExpense(let workOrderId, let vendorName, let receiptNumber, let currency, let receiptImageUrl, let lat, let lng, let items):
+          var body: [String: Any] = [
               "workOrderId": workOrderId,
-              "supplierName": storeName,
-              "totalAmount": amount,
-              "invoiceNumber": invoiceNum,
+              "vendorName": vendorName,
+              "currency": currency,
+              "receiptImageUrl": receiptImageUrl,
               "receiptStoreLatitude": lat,
-              "receiptStoreLongitude": lng
+              "receiptStoreLongitude": lng,
+              "items": items
           ]
+          if let receiptNumber = receiptNumber, !receiptNumber.isEmpty {
+              body["receiptNumber"] = receiptNumber
+          }
           request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
       case .approveExpense(_, let status, let reason):
-          var body: [String: Any] = ["status": status]
-          if let reason = reason { body["rejectionReason"] = reason }
+          var body: [String: Any] = ["approvalStatus": status]
+          if let reason = reason, !reason.isEmpty {
+              body["rejectionReason"] = reason
+          }
           request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
       case .saveDossier(_, let payload):
