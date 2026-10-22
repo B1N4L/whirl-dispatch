@@ -6,23 +6,43 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct NewExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var workOrders: [WorkOrder]
     var preselectedWorkOrderId: String?
-    var onSubmit: (String, String, String?, Double, Int, String) async -> Bool
+    var onSubmit: (String, String, String?, Double, Int, String, PartCategory) async -> Bool
 
     @State private var selectedWorkOrderId: String = ""
     @State private var vendorName: String = ""
     @State private var invoiceNumber: String = ""
+    @State private var selectedCategory: PartCategory = .hardware
     @State private var partDescription: String = ""
     @State private var quantity: Int = 1
     @State private var unitPriceString: String = ""
 
     @State private var isSubmitting: Bool = false
     @State private var errorMessage: String? = nil
+
+    private let expenseThreshold: Double = 250.0
+
+
+    // live calculated subtotal
+    private var calculatedTotal: Double {
+        let price = Double(unitPriceString.replacingOccurrences(of: "$", with: "").trimmingCharacters(in: .whitespaces)) ?? 0.0
+        return Double(quantity) * price
+    }
+
+    // currency formatted string using standard number formatter
+    private var formattedTotal: String {
+       let formatter = NumberFormatter()
+       formatter.numberStyle = .currency
+       formatter.currencyCode = "USD"
+       formatter.maximumFractionDigits = 2
+       return formatter.string(from: NSNumber(value: calculatedTotal)) ?? String(format: "$%.2f", calculatedTotal)
+    }
 
 
     var body: some View {
@@ -54,9 +74,22 @@ struct NewExpenseSheet: View {
               }
 
 
-              // section 3: parts detail
+              // section 3: category picker chips
+              Section(header: Text("Part Category")) {
+                  ScrollView(.horizontal, showsIndicators: false) {
+                      HStack(spacing: 8) {
+                          ForEach(PartCategory.allCases) { cat in
+                              categoryChip(cat)
+                          }
+                      }
+                      .padding(.vertical, 4)
+                  }
+              }
+
+
+              // section 4: parts detail & live total
               Section(header: Text("Emergency Part Details")) {
-                  TextField("Part Description (e.g. Capacitor 45/5)", text: $partDescription)
+                  TextField("Part Description (e.g. Contactor 30A 24V Coil)", text: $partDescription)
 
                   Stepper(value: $quantity, in: 1...99) {
                      HStack {
@@ -75,13 +108,51 @@ struct NewExpenseSheet: View {
                           .multilineTextAlignment(.trailing)
                           .frame(width: 120)
                   }
+
+                  // formatted total row
+                  HStack {
+                      Text("Estimated Subtotal")
+                          .font(.appSubheadline)
+                          .foregroundColor(.secondary)
+                      Spacer()
+                      Text(formattedTotal)
+                          .font(.appHeadline)
+                          .foregroundColor(calculatedTotal > expenseThreshold ? Color.statusAmber : Color.brandNavy)
+                  }
+                  .padding(.top, 2)
               }
 
 
-              // section 4: camera placeholder
+              // threshold warning alert if total exceeds $250
+              if calculatedTotal > expenseThreshold {
+                  Section {
+                      HStack(alignment: .top, spacing: 10) {
+                          Image(systemName: "exclamationmark.shield.fill")
+                              .font(.system(size: 20))
+                              .foregroundColor(Color.statusAmber)
+
+                          VStack(alignment: .leading, spacing: 3) {
+                              Text("Optical Inspection Required")
+                                  .font(.appSubheadline)
+                                  .fontWeight(.semibold)
+                                  .foregroundColor(Color.statusAmber)
+
+                              Text("Claims exceeding $250.00 require supervisor review before customer invoice generation.")
+                                  .font(.appCaption)
+                                  .foregroundColor(.secondary)
+                          }
+                      }
+                      .padding(.vertical, 2)
+                  }
+              }
+
+
+              // section 5: camera placeholder
               Section(header: Text("Proof of Purchase")) {
                   Button(action: {
                       // optical camera capture will be wired in Phase 11
+                      let generator = UIImpactFeedbackGenerator(style: .light)
+                      generator.impactOccurred()
                   }) {
                       HStack(spacing: 12) {
                           Image(systemName: "camera.viewfinder")
@@ -150,6 +221,35 @@ struct NewExpenseSheet: View {
     }
 
 
+    @ViewBuilder
+    private func categoryChip(_ cat: PartCategory) -> some View {
+        let isSelected = selectedCategory == cat
+
+        Button(action: {
+            selectedCategory = cat
+            let impact = UIImpactFeedbackGenerator(style: .light)
+            impact.impactOccurred()
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: cat.iconName)
+                    .font(.system(size: 13))
+                Text(cat.rawValue)
+                    .font(.system(size: 12, weight: isSelected ? .bold : .regular))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.brandNavy : Color(uiColor: .secondarySystemBackground))
+            .foregroundColor(isSelected ? .white : .primary)
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(isSelected ? Color.brandNavy : Color.gray.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+
     private func submitForm() {
         guard !selectedWorkOrderId.isEmpty else {
             errorMessage = "Please select an assigned work order."
@@ -168,7 +268,8 @@ struct NewExpenseSheet: View {
             return
         }
 
-        guard let price = Double(unitPriceString), price > 0 else {
+        let cleanPriceStr = unitPriceString.replacingOccurrences(of: "$", with: "").trimmingCharacters(in: .whitespaces)
+        guard let price = Double(cleanPriceStr), price > 0 else {
             errorMessage = "Please enter a valid positive unit price."
             return
         }
@@ -178,7 +279,7 @@ struct NewExpenseSheet: View {
 
         Task {
             let inv = invoiceNumber.trimmingCharacters(in: .whitespaces).isEmpty ? nil : invoiceNumber.trimmingCharacters(in: .whitespaces)
-            let success = await onSubmit(selectedWorkOrderId, cleanVendor, inv, price, quantity, cleanPart)
+            let success = await onSubmit(selectedWorkOrderId, cleanVendor, inv, price, quantity, cleanPart, selectedCategory)
             isSubmitting = false
             if success {
                 dismiss()
