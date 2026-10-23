@@ -9,25 +9,27 @@ import SwiftUI
 
 struct SupervisorSplitView: View {
     @Bindable var authVM: AuthViewModel
-    @State private var selectedMenu: SupervisorMenu? = .fleetMap
+    @State private var viewModel = SupervisorViewModel()
+    @State private var selectedMenu: SupervisorMenu? = .activeDispatches
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var showReassignSheet: Bool = false
 
 
     enum SupervisorMenu: String, CaseIterable, Identifiable {
-        case fleetMap = "Fleet Map"
         case activeDispatches = "Active Dispatches"
-        case expenseApprovals = "Expense Approvals"
         case teamStatus = "Technician Roster"
+        case expenseApprovals = "Expense Approvals"
+        case fleetMap = "Fleet Map"
         case profile = "Supervisor Profile"
 
         var id: String { rawValue }
 
         var iconName: String {
             switch self {
-            case .fleetMap: return "map.fill"
             case .activeDispatches: return "list.bullet.clipboard.fill"
-            case .expenseApprovals: return "checkmark.seal.fill"
             case .teamStatus: return "person.3.fill"
+            case .expenseApprovals: return "checkmark.seal.fill"
+            case .fleetMap: return "map.fill"
             case .profile: return "person.crop.circle.fill"
             }
         }
@@ -65,35 +67,20 @@ struct SupervisorSplitView: View {
             Group {
                 if let menu = selectedMenu {
                     switch menu {
-                    case .fleetMap:
-                        VStack(spacing: 12) {
-                            Text("Facility Zones")
-                                .font(.appHeadline)
-                            List {
-                                Text("Zone 1: Metro Commercial HQ")
-                                Text("Zone 2: Sub-Basement Chiller")
-                                Text("Zone 3: North Plant Room")
-                            }
-                        }
                     case .activeDispatches:
-                        List {
-                            Text("WO-2026-4401: Hemas Chiller Fault")
-                            Text("WO-2026-4402: Rooftop AHU Inspection")
-                            Text("WO-2026-4403: Emergency Leak Repair")
-                        }
-                    case .expenseApprovals:
-                        List {
-                            Text("Supply House Receipt - $240.00 (Pending)")
-                            Text("Refrigerant R410A - $185.00 (Pending)")
-                        }
+                        dispatchesContentList
+
                     case .teamStatus:
-                        List {
-                            Text("Nuwan Silva (Field Tech) - Active On-Site")
-                            Text("Kasun Perera (Lead Tech) - En Route")
-                            Text("Dinesh Fernando (Field Tech) - Available")
-                        }
+                        teamRosterContentList
+
+                    case .expenseApprovals:
+                        expenseApprovalsContentList
+
+                    case .fleetMap:
+                        fleetMapPlaceholderList
+
                     case .profile:
-                        Text("Settings & Session")
+                        ProfileTabView(authVM: authVM)
                     }
                 } else {
                     Text("Select a category")
@@ -107,6 +94,23 @@ struct SupervisorSplitView: View {
             Group {
                 if let menu = selectedMenu {
                     switch menu {
+                    case .activeDispatches:
+                        if let order = viewModel.selectedWorkOrder {
+                            dispatchDetailPane(order)
+                        } else {
+                            EmptyStateView(
+                                icon: "list.clipboard",
+                                title: "No Dispatch Selected",
+                                message: "Choose a commercial work order from the list to inspect facility telemetry and assign crew."
+                            )
+                        }
+
+                    case .teamStatus:
+                        teamRosterDetailPane
+
+                    case .expenseApprovals:
+                        expenseApprovalPlaceholderPane
+
                     case .fleetMap:
                         VStack(spacing: 16) {
                             Image(systemName: "map.fill")
@@ -114,46 +118,7 @@ struct SupervisorSplitView: View {
                                 .foregroundColor(Color.accentBlue)
                             Text("Interactive Fleet & Facility Tracker")
                                 .font(.appTitle)
-                            Text("MapKit streaming GPS coordinates of all active technicians.")
-                                .font(.appSubheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
-
-                    case .activeDispatches:
-                        VStack(spacing: 16) {
-                            Image(systemName: "list.bullet.clipboard.fill")
-                                .font(.system(size: 56))
-                                .foregroundColor(Color.brandNavy)
-                            Text("Dispatch Management & Reassignment")
-                                .font(.appTitle)
-                            Text("Review dispatched plant room work orders and assign lead techs.")
-                                .font(.appSubheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
-
-                    case .expenseApprovals:
-                        VStack(spacing: 16) {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 56))
-                                .foregroundColor(Color.statusGreen)
-                            Text("Optical Receipt Verification Queue")
-                                .font(.appTitle)
-                            Text("Approve or reject field parts purchases with OCR validation.")
-                                .font(.appSubheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
-
-                    case .teamStatus:
-                        VStack(spacing: 16) {
-                            Image(systemName: "person.3.fill")
-                                .font(.system(size: 56))
-                                .foregroundColor(Color.accentBlue)
-                            Text("Field Technician Roster & Safety Logs")
-                                .font(.appTitle)
-                            Text("Inspect live geofence breaches, attendance sessions, and certifications.")
+                            Text("MapKit streaming GPS coordinates will be configured in Phase 10.")
                                 .font(.appSubheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -170,47 +135,484 @@ struct SupervisorSplitView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .task {
+            await viewModel.loadSupervisorData()
+        }
+        .sheet(isPresented: $showReassignSheet) {
+            reassignCrewSheet
+        }
+    }
+
+
+    // MARK: - Column 2: Content Lists
+
+    private var dispatchesContentList: some View {
+        VStack(spacing: 0) {
+            // filter chips
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    FilterChip(
+                        title: "All",
+                        count: viewModel.workOrders.count,
+                        isSelected: viewModel.selectedFilter == .all
+                    ) {
+                        viewModel.selectedFilter = .all
+                    }
+
+                    FilterChip(
+                        title: "Emergency",
+                        count: viewModel.emergencyDispatchesCount,
+                        isSelected: viewModel.selectedFilter == .emergency
+                    ) {
+                        viewModel.selectedFilter = .emergency
+                    }
+
+                    FilterChip(
+                        title: "Active",
+                        count: viewModel.activeOnSiteCount,
+                        isSelected: viewModel.selectedFilter == .active
+                    ) {
+                        viewModel.selectedFilter = .active
+                    }
+
+                    FilterChip(
+                        title: "Completed",
+                        isSelected: viewModel.selectedFilter == .completed
+                    ) {
+                        viewModel.selectedFilter = .completed
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+
+            Divider()
+
+            List(viewModel.filteredWorkOrders, selection: $viewModel.selectedWorkOrder) { order in
+                HStack(spacing: 10) {
+                    // priority color stripe
+                    Rectangle()
+                        .fill(order.priority == .criticalEmergency ? Color.statusRed : Color.brandNavy)
+                        .frame(width: 4)
+                        .cornerRadius(2)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(order.workOrderNumber)
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .foregroundColor(Color.brandNavy)
+
+                            Spacer()
+
+                            StatusBadge(status: order.status.toStatusType)
+                        }
+
+                        Text(order.title)
+                            .font(.appSubheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+
+                        Text(order.facility?.facilityName ?? "Commercial Plant Room")
+                            .font(.appCaption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+                .tag(order)
+            }
+            .listStyle(.plain)
+            .refreshable {
+                await viewModel.loadSupervisorData()
+            }
+        }
+    }
+
+    private var teamRosterContentList: some View {
+        List(viewModel.technicians) { tech in
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(tech.name)
+                        .font(.appHeadline)
+                        .foregroundColor(.primary)
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Image(systemName: tech.status.iconName)
+                            .font(.system(size: 10))
+                        Text(tech.status.rawValue)
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundColor(tech.status.color)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(tech.status.color.opacity(0.12))
+                    .clipShape(Capsule())
+                }
+
+                Text(tech.roleTitle)
+                    .font(.appCaption)
+                    .foregroundColor(.secondary)
+
+                if let dispatch = tech.assignedWorkOrderTitle {
+                    HStack(spacing: 4) {
+                        Image(systemName: "wrench.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(Color.brandNavy)
+                        Text(dispatch)
+                            .font(.system(size: 12))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .listStyle(.plain)
+    }
+
+    private var expenseApprovalsContentList: some View {
+        List(viewModel.pendingExpenses) { claim in
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(claim.vendorName)
+                        .font(.appHeadline)
+                    Spacer()
+                    Text(claim.formattedAmount)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(Color.brandNavy)
+                }
+                HStack {
+                    Text(claim.approvalStatus.label)
+                        .font(.caption2)
+                        .foregroundColor(claim.approvalStatus.color)
+                    Spacer()
+                    Text(claim.receiptNumber ?? "No Receipt")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .listStyle(.plain)
+    }
+
+    private var fleetMapPlaceholderList: some View {
+        List {
+            Text("Zone 1: Metro Commercial Center (Chiller 04)")
+            Text("Zone 2: Apex Healthcare Tower (Rooftop AHU)")
+            Text("Zone 3: North Central Data Center")
+        }
+    }
+
+
+    // MARK: - Column 3: Detail Panes
+
+    private func dispatchDetailPane(_ order: WorkOrder) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // top header card
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(order.workOrderNumber)
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.accentBlue)
+
+                        Spacer()
+
+                        PriorityBadge(priority: order.priority.toPriorityLevel)
+                        StatusBadge(status: order.status.toStatusType)
+                    }
+
+                    Text(order.title)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.primary)
+
+                    Text(order.description)
+                        .font(.appBody)
+                        .foregroundColor(.secondary)
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                // facility telemetry card
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Facility Telemetry & Access", systemImage: "building.2.fill")
+                        .font(.appHeadline)
+                        .foregroundColor(Color.brandNavy)
+
+                    Divider()
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(order.facility?.facilityName ?? "Facility Info Unavailable")
+                                .font(.appHeadline)
+                            Text(order.facility?.address ?? "Basement Plant Room B2")
+                                .font(.appCaption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+
+                        if let phone = order.facility?.contactPhone {
+                            Link(destination: URL(string: "tel:\(phone)")!) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "phone.fill")
+                                    Text("Contact Site")
+                                }
+                                .font(.appCaption)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.accentBlue.opacity(0.12))
+                                .foregroundColor(Color.accentBlue)
+                                .cornerRadius(8)
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                // assigned crew card
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Label("Assigned Crew & Safety", systemImage: "person.3.fill")
+                            .font(.appHeadline)
+                            .foregroundColor(Color.brandNavy)
+
+                        Spacer()
+
+                        Button("Reassign Crew") {
+                            showReassignSheet = true
+                        }
+                        .font(.appCaption)
+                        .fontWeight(.semibold)
+                        .buttonStyle(.bordered)
+                        .tint(Color.brandNavy)
+                    }
+
+                    Divider()
+
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.crop.circle.badge.checkmark")
+                            .font(.system(size: 32))
+                            .foregroundColor(Color.statusGreen)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Nuwan Silva (Lead Tech)")
+                                .font(.appHeadline)
+                            Text("Safety Clearance: Plant Room HVAC LOTO Verified")
+                                .font(.appCaption)
+                                .foregroundColor(Color.statusGreen)
+                        }
+                        Spacer()
+                    }
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                // scheduled timings
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Service Level Agreement (SLA)", systemImage: "clock.badge.exclamationmark.fill")
+                        .font(.appHeadline)
+                        .foregroundColor(Color.brandNavy)
+
+                    Divider()
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Target Arrival")
+                                .font(.appCaption)
+                                .foregroundColor(.secondary)
+                            Text(order.scheduledStartTime.prefix(16))
+                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Target Wrap-Up")
+                                .font(.appCaption)
+                                .foregroundColor(.secondary)
+                            Text(order.scheduledEndTime.prefix(16))
+                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+            }
+            .padding(16)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+    }
+
+    private var teamRosterDetailPane: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Technician Team Deployment")
+                    .font(.appTitle)
+
+                Text("Real-time roster of active technicians deployed across regional plant rooms.")
+                    .font(.appSubheadline)
+                    .foregroundColor(.secondary)
+
+                ForEach(viewModel.technicians) { tech in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(tech.name)
+                                    .font(.appHeadline)
+                                Text(tech.roleTitle)
+                                    .font(.appCaption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Text(tech.status.rawValue)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(tech.status.color)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(tech.status.color.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+
+                        Divider()
+
+                        HStack {
+                            Image(systemName: "mappin.circle.fill")
+                                .foregroundColor(.secondary)
+                            Text(tech.lastSeenText)
+                                .font(.appCaption)
+                                .foregroundColor(.secondary)
+
+                            Spacer()
+
+                            Link(destination: URL(string: "tel:\(tech.contactNumber)")!) {
+                                Image(systemName: "phone.circle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(Color.statusGreen)
+                            }
+                        }
+                    }
+                    .padding(14)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .cornerRadius(10)
+                }
+            }
+            .padding(16)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+    }
+
+    private var expenseApprovalPlaceholderPane: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 56))
+                .foregroundColor(Color.statusGreen)
+            Text("Optical Receipt Verification Queue")
+                .font(.appTitle)
+            Text("Approve or reject field parts purchases with OCR validation.")
+                .font(.appSubheadline)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+    }
+
+    private var reassignCrewSheet: some View {
+        NavigationStack {
+            List(viewModel.technicians) { tech in
+                Button(action: {
+                    if let wo = viewModel.selectedWorkOrder {
+                        viewModel.reassignTechnician(workOrderId: wo.id, techName: tech.name)
+                    }
+                    showReassignSheet = false
+                }) {
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(tech.name)
+                                .font(.appHeadline)
+                                .foregroundColor(.primary)
+                            Text(tech.roleTitle)
+                                .font(.appCaption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Text(tech.status.rawValue)
+                            .font(.caption)
+                            .foregroundColor(tech.status.color)
+                    }
+                }
+            }
+            .navigationTitle("Reassign Dispatch Crew")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showReassignSheet = false
+                    }
+                }
+            }
+        }
     }
 }
 
 
 struct SupervisorCompactView: View {
     @Bindable var authVM: AuthViewModel
+    @State private var viewModel = SupervisorViewModel()
     @State private var selectedTab: Int = 0
 
     var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                VStack(spacing: 12) {
-                    Spacer()
-                    Image(systemName: "map.fill")
-                        .font(.system(size: 48))
-                        .foregroundColor(Color.accentBlue)
-                    Text("Fleet Map & Facilities")
-                        .font(.appHeadline)
-                    Spacer()
-                }
-                .navigationTitle("Fleet Map")
-            }
-            .tabItem {
-                Label("Fleet Map", systemImage: "map.fill")
-            }
-            .tag(0)
-
-            NavigationStack {
-                VStack(spacing: 12) {
-                    Spacer()
-                    Image(systemName: "list.bullet.clipboard.fill")
-                        .font(.system(size: 48))
-                        .foregroundColor(Color.brandNavy)
-                    Text("Dispatches & Assignments")
-                        .font(.appHeadline)
-                    Spacer()
+                List(viewModel.workOrders) { order in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(order.workOrderNumber)
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            Spacer()
+                            StatusBadge(status: order.status.toStatusType)
+                        }
+                        Text(order.title)
+                            .font(.appHeadline)
+                        Text(order.facility?.facilityName ?? "Facility")
+                            .font(.appCaption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
                 }
                 .navigationTitle("Dispatches")
             }
             .tabItem {
                 Label("Dispatches", systemImage: "list.bullet.clipboard.fill")
+            }
+            .tag(0)
+
+            NavigationStack {
+                List(viewModel.technicians) { tech in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(tech.name)
+                                .font(.appHeadline)
+                            Text(tech.roleTitle)
+                                .font(.appCaption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Text(tech.status.rawValue)
+                            .font(.caption2)
+                            .foregroundColor(tech.status.color)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .navigationTitle("Team Roster")
+            }
+            .tabItem {
+                Label("Team", systemImage: "person.3.fill")
             }
             .tag(1)
 
@@ -240,5 +642,8 @@ struct SupervisorCompactView: View {
             .tag(3)
         }
         .tint(Color.brandNavy)
+        .task {
+            await viewModel.loadSupervisorData()
+        }
     }
 }

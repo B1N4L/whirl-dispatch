@@ -8,7 +8,7 @@
 import Foundation
 import CoreLocation
 
-struct Facility: Identifiable, Codable, Equatable {
+struct Facility: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let companyName: String
     let facilityName: String

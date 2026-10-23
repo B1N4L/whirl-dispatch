@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum WorkOrderPriority: String, Codable, CaseIterable {
+enum WorkOrderPriority: String, Codable, CaseIterable, Hashable {
     case low = "LOW"
     case medium = "MEDIUM"
     case high = "HIGH"
@@ -24,7 +24,7 @@ enum WorkOrderPriority: String, Codable, CaseIterable {
 }
 
 
-enum WorkOrderStatus: String, Codable, CaseIterable {
+enum WorkOrderStatus: String, Codable, CaseIterable, Hashable {
     case dispatched = "DISPATCHED"
     case enRoute = "EN_ROUTE"
     case onSiteActive = "ON_SITE_ACTIVE"
@@ -49,7 +49,7 @@ enum WorkOrderStatus: String, Codable, CaseIterable {
 }
 
 
-struct WorkOrder: Identifiable, Codable, Equatable {
+struct WorkOrder: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let workOrderNumber: String
     let clientFacilityId: String
