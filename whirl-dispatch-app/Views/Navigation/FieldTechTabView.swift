@@ -46,26 +46,11 @@ struct FieldTechTabView: View {
 
 
                 // tab 3: emergency field expenses
-                NavigationStack {
-                    VStack {
-                        Spacer()
-                        Image(systemName: "receipt.fill")
-                            .font(.system(size: 48))
-                            .foregroundColor(Color.statusAmber)
-                        Text("Emergency Field Parts")
-                            .font(.appHeadline)
-                            .padding(.top, 8)
-                        Text("Log parts purchased from supply houses")
-                            .font(.appSubheadline)
-                            .foregroundColor(.secondary)
-                        Spacer()
+                ExpensesView()
+                    .tabItem {
+                        Label("Expenses", systemImage: "receipt.fill")
                     }
-                    .navigationTitle("Expenses")
-                }
-                .tabItem {
-                    Label("Expenses", systemImage: "receipt.fill")
-                }
-                .tag(2)
+                    .tag(2)
 
 
                 // tab 4: technician profile & session
