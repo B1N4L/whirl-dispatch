@@ -124,17 +124,7 @@ struct SupervisorSplitView: View {
                         teamRosterDetailPane
 
                     case .fleetMap:
-                        VStack(spacing: 16) {
-                            Image(systemName: "map.fill")
-                                .font(.system(size: 56))
-                                .foregroundColor(Color.accentBlue)
-                            Text("Interactive Fleet & Facility Tracker")
-                                .font(.appTitle)
-                            Text("MapKit streaming GPS coordinates will be configured in Phase 10.")
-                                .font(.appSubheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
+                        FacilityMapView()
 
                     case .profile:
                         ProfileTabView(authVM: authVM)
@@ -960,12 +950,20 @@ struct SupervisorCompactView: View {
             .tag(2)
 
             NavigationStack {
+                FacilityMapView()
+            }
+            .tabItem {
+                Label("Fleet Map", systemImage: "map.fill")
+            }
+            .tag(3)
+
+            NavigationStack {
                 ProfileTabView(authVM: authVM)
             }
             .tabItem {
                 Label("Profile", systemImage: "person.crop.circle.fill")
             }
-            .tag(3)
+            .tag(4)
         }
         .tint(Color.brandNavy)
         .task {

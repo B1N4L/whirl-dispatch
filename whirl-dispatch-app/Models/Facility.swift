@@ -38,3 +38,9 @@ struct Facility: Identifiable, Codable, Equatable, Hashable {
        "\(companyName) - \(facilityName)"
     }
 }
+
+
+struct FacilityListResponse: Codable {
+    let count: Int?
+    let facilities: [Facility]
+}
