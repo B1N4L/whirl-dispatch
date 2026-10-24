@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ClerkSplitView: View {
     @Bindable var authVM: AuthViewModel
+    @State private var viewModel = BillingViewModel()
     @State private var selectedMenu: ClerkMenu? = .invoicingQueue
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
@@ -64,24 +65,16 @@ struct ClerkSplitView: View {
                 if let menu = selectedMenu {
                     switch menu {
                     case .invoicingQueue:
-                        List {
-                            Text("INV-2026-001: Hemas HQ - $758.70 (Ready)")
-                            Text("INV-2026-002: Rooftop Coil - $1,240.00 (Pending)")
-                            Text("INV-2026-003: Motor Replacement - $450.00 (Draft)")
-                        }
+                        invoicingQueueContentList
+
                     case .approvedExpenses:
-                        List {
-                            Text("Supply House Fasteners - $85.00 (Approved)")
-                            Text("Compressor Valve Seal - $140.00 (Approved)")
-                        }
+                        approvedExpensesContentList
+
                     case .revenueTelemetry:
-                        List {
-                            Text("Facility Revenue Summary")
-                            Text("Labor Hours vs Parts Cost")
-                            Text("Monthly Billed Breakdown")
-                        }
+                        telemetryPlaceholderList
+
                     case .profile:
-                        Text("Clerk Account Settings")
+                        ProfileTabView(authVM: authVM)
                     }
                 } else {
                     Text("Select a billing category")
@@ -91,35 +84,23 @@ struct ClerkSplitView: View {
             }
             .navigationTitle(selectedMenu?.rawValue ?? "Invoicing")
         } detail: {
-            // detail pane
+            // right detail pane
             Group {
                 if let menu = selectedMenu {
                     switch menu {
                     case .invoicingQueue:
-                        VStack(spacing: 16) {
-                            Image(systemName: "doc.text.fill")
-                                .font(.system(size: 56))
-                                .foregroundColor(Color.brandNavy)
-                            Text("Automated Invoice Breakdown & Markup")
-                                .font(.appTitle)
-                            Text("Labor hours multiplied by contract rate plus parts markup calculation.")
-                                .font(.appSubheadline)
-                                .foregroundColor(.secondary)
+                        if let order = viewModel.selectedWorkOrder {
+                            billingEstimationDetailPane(order)
+                        } else {
+                            EmptyStateView(
+                                icon: "doc.text",
+                                title: "No Work Order Selected",
+                                message: "Select a completed commercial dispatch to compile client billing invoice."
+                            )
                         }
-                        .padding()
 
                     case .approvedExpenses:
-                        VStack(spacing: 16) {
-                            Image(systemName: "creditcard.fill")
-                                .font(.system(size: 56))
-                                .foregroundColor(Color.statusGreen)
-                            Text("Supervisor Approved Field Claims")
-                                .font(.appTitle)
-                            Text("All parts verified and signed off for client billing inclusion.")
-                                .font(.appSubheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
+                        approvedExpensesDetailPane
 
                     case .revenueTelemetry:
                         VStack(spacing: 16) {
@@ -128,7 +109,7 @@ struct ClerkSplitView: View {
                                 .foregroundColor(Color.accentBlue)
                             Text("Swift Charts Financial Telemetry")
                                 .font(.appTitle)
-                            Text("Interactive bar and donut charts illustrating monthly margins.")
+                            Text("Interactive revenue telemetry charts will be configured in Phase 12.")
                                 .font(.appSubheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -145,27 +126,348 @@ struct ClerkSplitView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .task {
+            await viewModel.loadBillingData()
+        }
+    }
+
+
+    // MARK: - Column 2: Content Lists
+
+    private var invoicingQueueContentList: some View {
+        List(viewModel.workOrders, selection: $viewModel.selectedWorkOrder) { order in
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(order.workOrderNumber)
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .foregroundColor(Color.brandNavy)
+
+                    Spacer()
+
+                    StatusBadge(status: order.status.toStatusType)
+                }
+
+                Text(order.title)
+                    .font(.appSubheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                Text(order.facility?.facilityName ?? "Commercial Client")
+                    .font(.appCaption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.vertical, 4)
+            .tag(order)
+        }
+        .listStyle(.plain)
+        .refreshable {
+            await viewModel.loadBillingData()
+        }
+    }
+
+    private var approvedExpensesContentList: some View {
+        List(viewModel.approvedExpenses) { claim in
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(claim.vendorName)
+                        .font(.appHeadline)
+                    Spacer()
+                    Text(claim.formattedAmount)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(Color.statusGreen)
+                }
+                HStack {
+                    Text("Approved by Supervisor")
+                        .font(.caption2)
+                        .foregroundColor(Color.statusGreen)
+                    Spacer()
+                    Text(claim.receiptNumber ?? "INV-VERIFIED")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .listStyle(.plain)
+    }
+
+    private var telemetryPlaceholderList: some View {
+        List {
+            Text("Monthly Facility Revenue")
+            Text("Parts Margin vs Wholesale Cost")
+            Text("Labor Hours Utilization")
+        }
+    }
+
+
+    // MARK: - Column 3: Billing Estimation Detail Pane
+
+    private func billingEstimationDetailPane(_ order: WorkOrder) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                // top header card
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(viewModel.currentInvoiceNumber)
+                            .font(.system(size: 24, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.brandNavy)
+
+                        Text(order.title)
+                            .font(.appHeadline)
+
+                        Text(order.facility?.facilityName ?? "Commercial Facility")
+                            .font(.appCaption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    Text(viewModel.invoiceStatus.label)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(Color.statusGreen)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.statusGreen.opacity(0.14))
+                        .clipShape(Capsule())
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                // 1. labor hours calculation card
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Label("Billable Labor Hours", systemImage: "clock.badge.checkmark.fill")
+                            .font(.appHeadline)
+                            .foregroundColor(Color.brandNavy)
+
+                        Spacer()
+
+                        Text(viewModel.formattedLaborSubtotal)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(Color.brandNavy)
+                    }
+
+                    Divider()
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Verified Shift Hours")
+                                .font(.appCaption)
+                                .foregroundColor(.secondary)
+                            Text(String(format: "%.1f hours", viewModel.laborHours))
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Hourly Contract Rate")
+                                .font(.appCaption)
+                                .foregroundColor(.secondary)
+                            Text(String(format: "$%.2f / hr", viewModel.hourlyRate))
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                // 2. parts & markup calculation card (with interactive slider)
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Label("Emergency Parts & Contract Markup", systemImage: "wrench.and.screwdriver.fill")
+                            .font(.appHeadline)
+                            .foregroundColor(Color.brandNavy)
+
+                        Spacer()
+
+                        Text(viewModel.formattedPartsWithMarkup)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(Color.brandNavy)
+                    }
+
+                    Divider()
+
+                    HStack {
+                        Text("Wholesale Parts Cost")
+                            .font(.appSubheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(viewModel.formattedPartsSubtotal)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+
+                    // interactive markup slider
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Parts Markup Percentage")
+                                .font(.appSubheadline)
+                                .foregroundColor(.secondary)
+
+                            Spacer()
+
+                            Text("+\(Int(viewModel.partsMarkupPercent))% (+\(viewModel.formattedMarkupAmount))")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(Color.statusGreen)
+                        }
+
+                        Slider(value: $viewModel.partsMarkupPercent, in: 15.0...45.0, step: 1.0)
+                            .tint(Color.statusGreen)
+
+                        HStack {
+                            Text("15% (Standard)")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("45% (Critical Emergency)")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                    .cornerRadius(8)
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                // 3. equipment fee & taxes card
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Surcharges & Sales Tax", systemImage: "percent")
+                        .font(.appHeadline)
+                        .foregroundColor(Color.brandNavy)
+
+                    Divider()
+
+                    HStack {
+                        Text("Fleet Equipment Surcharge")
+                            .font(.appSubheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(viewModel.formattedEquipmentFee)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+
+                    HStack {
+                        Text("State Sales Tax (8.0%)")
+                            .font(.appSubheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(viewModel.formattedTaxAmount)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                // 4. grand total card
+                VStack(spacing: 12) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Total Invoice Estimate")
+                                .font(.appCaption)
+                                .foregroundColor(.secondary)
+                            Text(viewModel.formattedGrandTotal)
+                                .font(.system(size: 28, weight: .bold, design: .rounded))
+                                .foregroundColor(Color.brandNavy)
+                        }
+
+                        Spacer()
+
+                        Button(action: {
+                            Task {
+                                await viewModel.generateBackendEstimate()
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                Text("Re-Compile")
+                                    .fontWeight(.bold)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Color.brandNavy)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+            }
+            .padding(16)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+    }
+
+    private var approvedExpensesDetailPane: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Approved Field Parts Ledger")
+                    .font(.appTitle)
+
+                Text("All emergency supply receipts verified by operations supervisor, ready for client billing markup.")
+                    .font(.appSubheadline)
+                    .foregroundColor(.secondary)
+
+                ForEach(viewModel.approvedExpenses) { claim in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(claim.vendorName)
+                                .font(.appHeadline)
+                            Spacer()
+                            Text(claim.formattedAmount)
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(Color.statusGreen)
+                        }
+
+                        Text("Ticket: \(claim.receiptNumber ?? "INV-APPROVED")")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(14)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .cornerRadius(10)
+                }
+            }
+            .padding(16)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
     }
 }
 
 
 struct ClerkCompactView: View {
     @Bindable var authVM: AuthViewModel
+    @State private var viewModel = BillingViewModel()
     @State private var selectedTab: Int = 0
 
     var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                VStack(spacing: 12) {
-                    Spacer()
-                    Image(systemName: "doc.text.fill")
-                        .font(.system(size: 48))
-                        .foregroundColor(Color.brandNavy)
-                    Text("Invoicing Queue")
-                        .font(.appHeadline)
-                    Spacer()
+                List(viewModel.workOrders) { order in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(order.workOrderNumber)
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            Spacer()
+                            StatusBadge(status: order.status.toStatusType)
+                        }
+                        Text(order.title)
+                            .font(.appHeadline)
+                        Text(order.facility?.facilityName ?? "Facility")
+                            .font(.appCaption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
                 }
-                .navigationTitle("Invoicing")
+                .navigationTitle("Invoicing Queue")
             }
             .tabItem {
                 Label("Invoicing", systemImage: "doc.text.fill")
@@ -173,16 +475,23 @@ struct ClerkCompactView: View {
             .tag(0)
 
             NavigationStack {
-                VStack(spacing: 12) {
-                    Spacer()
-                    Image(systemName: "creditcard.fill")
-                        .font(.system(size: 48))
-                        .foregroundColor(Color.statusGreen)
-                    Text("Approved Claims")
-                        .font(.appHeadline)
-                    Spacer()
+                List(viewModel.approvedExpenses) { claim in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(claim.vendorName)
+                                .font(.appHeadline)
+                            Spacer()
+                            Text(claim.formattedAmount)
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(Color.statusGreen)
+                        }
+                        Text(claim.receiptNumber ?? "INV-VERIFIED")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
                 }
-                .navigationTitle("Claims")
+                .navigationTitle("Approved Claims")
             }
             .tabItem {
                 Label("Claims", systemImage: "creditcard.fill")
@@ -215,5 +524,8 @@ struct ClerkCompactView: View {
             .tag(3)
         }
         .tint(Color.brandNavy)
+        .task {
+            await viewModel.loadBillingData()
+        }
     }
 }

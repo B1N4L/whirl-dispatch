@@ -29,20 +29,20 @@ struct BillingInvoice: Identifiable, Codable, Equatable {
     let invoiceNumber: String
     let workOrderId: String
     let clientFacilityId: String
-   let clerkId: String
+    let clerkId: String
     let totalBillableLaborHours: String
     let hourlyLaborRateApplied: String
     let subtotalLabor: String
     let subtotalApprovedParts: String
     let partsMarkupPercentApplied: String
-   let subtotalPartsWithMarkup: String
+    let subtotalPartsWithMarkup: String
     let fleetEquipmentFee: String
     let taxPercent: String
     let taxAmount: String
     let grandTotal: String
     var status: InvoiceStatus
     let issueDate: String?
-   let dueDate: String?
+    let dueDate: String?
 
 
     // formatted currency helpers
@@ -66,4 +66,10 @@ struct BillingInvoice: Identifiable, Codable, Equatable {
         }
         return "$\(subtotalPartsWithMarkup)"
     }
+}
+
+
+struct EstimateResponse: Codable {
+    let message: String?
+    let invoice: BillingInvoice
 }

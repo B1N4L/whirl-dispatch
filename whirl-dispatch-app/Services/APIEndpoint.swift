@@ -35,6 +35,9 @@ enum APIEndpoint {
     case getExpensesByWorkOrder(workOrderId: String)
     case submitExpense(workOrderId: String, vendorName: String, receiptNumber: String?, currency: String, receiptImageUrl: String, lat: Double, lng: Double, items: [[String: Any]])
     case approveExpense(id: String, status: String, reason: String?)
+    case generateEstimate(workOrderId: String)
+    case getInvoice(id: String)
+    case updateInvoiceStatus(id: String, status: String)
     case getBillingInvoices
     case getDossier(workOrderId: String)
     case saveDossier(workOrderId: String, payload: [String: Any])
@@ -57,6 +60,9 @@ enum APIEndpoint {
         case .getExpensesByWorkOrder(let workOrderId): return "/expenses/work-order/\(workOrderId)"
         case .submitExpense: return "/expenses"
         case .approveExpense(let id, _, _): return "/expenses/\(id)/review"
+        case .generateEstimate(let workOrderId): return "/billing/estimate/\(workOrderId)"
+        case .getInvoice(let id): return "/billing/invoices/\(id)"
+        case .updateInvoiceStatus(let id, _): return "/billing/invoices/\(id)/status"
         case .getBillingInvoices: return "/billing"
         case .getDossier(let workOrderId): return "/dossiers/\(workOrderId)"
         case .saveDossier(let workOrderId, _): return "/dossiers/\(workOrderId)"
@@ -65,11 +71,11 @@ enum APIEndpoint {
 
     var method: HTTPMethod {
         switch self {
-        case .health, .getFacilities, .getFleet, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getExpensesByWorkOrder, .getBillingInvoices, .getDossier, .getAttendanceHistory:
+        case .health, .getFacilities, .getFleet, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getExpensesByWorkOrder, .getBillingInvoices, .getInvoice, .getDossier, .getAttendanceHistory:
             return .get
-        case .login, .clockIn, .clockOut, .pauseBreak, .submitExpense:
+        case .login, .clockIn, .clockOut, .pauseBreak, .submitExpense, .generateEstimate:
             return .post
-        case .updateWorkOrderStatus, .approveExpense, .saveDossier:
+        case .updateWorkOrderStatus, .approveExpense, .updateInvoiceStatus, .saveDossier:
             return .patch
         }
     }
@@ -153,6 +159,10 @@ enum APIEndpoint {
           if let reason = reason, !reason.isEmpty {
               body["rejectionReason"] = reason
           }
+          request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+      case .updateInvoiceStatus(_, let status):
+          let body = ["status": status]
           request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
       case .saveDossier(_, let payload):
