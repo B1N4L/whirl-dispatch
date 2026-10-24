@@ -8,7 +8,7 @@
 import Foundation
 import SwiftUI
 
-enum ExpenseApprovalStatus: String, Codable, CaseIterable {
+enum ExpenseApprovalStatus: String, Codable, CaseIterable, Hashable {
     case pending = "PENDING_SUPERVISOR_APPROVAL"
     case approved = "APPROVED"
     case rejected = "FLAGGED_REJECTED"
@@ -60,7 +60,7 @@ enum PartCategory: String, CaseIterable, Identifiable {
 }
 
 
-struct ExpenseItem: Identifiable, Codable, Equatable {
+struct ExpenseItem: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let expenseClaimId: String?
     let partDescription: String
@@ -70,7 +70,7 @@ struct ExpenseItem: Identifiable, Codable, Equatable {
 }
 
 
-struct ExpenseClaim: Identifiable, Codable, Equatable {
+struct ExpenseClaim: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let workOrderId: String
     let leadTechnicianId: String

@@ -155,6 +155,48 @@ final class SupervisorViewModel {
     }
 
 
+    // approve or reject an expense claim
+    func reviewExpense(claimId: String, status: ExpenseApprovalStatus, reason: String? = nil) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let res: CreateExpenseResponse = try await apiService.send(
+                .approveExpense(id: claimId, status: status.rawValue, reason: reason)
+            )
+
+            // update claim in array
+            if let idx = pendingExpenses.firstIndex(where: { $0.id == claimId }) {
+                pendingExpenses[idx] = res.claim
+            }
+            if selectedExpense?.id == claimId {
+                selectedExpense = res.claim
+            }
+
+            successToast = status == .approved ? "Expense claim approved." : "Expense claim flagged and rejected."
+            isLoading = false
+            return true
+        } catch {
+            // fallback offline/local simulation
+            if let idx = pendingExpenses.firstIndex(where: { $0.id == claimId }) {
+                var updated = pendingExpenses[idx]
+                updated.approvalStatus = status
+                updated.rejectionReason = reason
+                pendingExpenses[idx] = updated
+                if selectedExpense?.id == claimId {
+                    selectedExpense = updated
+                }
+                successToast = "Claim updated: \(status.label)."
+                isLoading = false
+                return true
+            }
+            errorMessage = error.localizedDescription
+            isLoading = false
+            return false
+        }
+    }
+
+
     // initial roster matching coursework scenario
     private func setupInitialTeamRoster() {
         self.technicians = [
