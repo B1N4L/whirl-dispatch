@@ -107,6 +107,38 @@ final class BillingViewModel {
     }
 
 
+    // formatted plain text export for sharing
+    var invoiceExportText: String {
+        guard let order = selectedWorkOrder else { return "No invoice loaded." }
+        return """
+        ==================================================
+        WHIRL DISPATCH HVAC SOLUTIONS
+        COMMERCIAL SERVICE & REPAIR INVOICE
+        ==================================================
+        Invoice #:   \(currentInvoiceNumber)
+        Work Order:  \(order.workOrderNumber)
+        Date:        \(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        Terms:       Net 30 Days
+
+        CLIENT DETAILS:
+        Facility:    \(order.facility?.companyName ?? "Commercial Client")
+        Location:    \(order.facility?.facilityName ?? "Main Site")
+        Address:     \(order.facility?.address ?? "Site Address")
+
+        LINE ITEM BREAKDOWN:
+        1. Labor (\(String(format: "%.1f", laborHours)) hrs @ \(String(format: "$%.2f", hourlyRate))/hr): \(formattedLaborSubtotal)
+        2. Parts & Materials (Markup \(Int(partsMarkupPercent))%): \(formattedPartsWithMarkup)
+        3. Equipment & Fleet Surcharge: \(formattedEquipmentFee)
+        4. Sales Tax (\(String(format: "%.1f", taxPercent))%): \(formattedTaxAmount)
+        --------------------------------------------------
+        TOTAL BALANCE DUE: \(formattedGrandTotal)
+        ==================================================
+        Payment Payable to: WhirlDispatch Engineering Services
+        Thank you for your business.
+        """
+    }
+
+
     // load work orders ready for billing
     func loadBillingData() async {
         isLoading = true

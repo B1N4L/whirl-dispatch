@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ClerkSplitView: View {
     @Bindable var authVM: AuthViewModel
@@ -159,6 +160,9 @@ struct ClerkSplitView: View {
             }
             .padding(.vertical, 4)
             .tag(order)
+            .onTapGesture {
+                viewModel.selectWorkOrder(order)
+            }
         }
         .listStyle(.plain)
         .refreshable {
@@ -235,7 +239,7 @@ struct ClerkSplitView: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .cornerRadius(12)
 
-                // 1. labor hours calculation card
+                // 1. labor hours calculation card with rate controls
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Label("Billable Labor Hours", systemImage: "clock.badge.checkmark.fill")
@@ -270,6 +274,34 @@ struct ClerkSplitView: View {
                                 .font(.system(size: 14, weight: .semibold))
                         }
                     }
+
+                    // interactive labor rate and hours controls
+                    VStack(spacing: 8) {
+                        Stepper(value: $viewModel.hourlyRate, in: 65.0...150.0, step: 5.0) {
+                            HStack {
+                                Text("Labor Rate:")
+                                    .font(.appCaption)
+                                    .foregroundColor(.secondary)
+                                Text(String(format: "$%.2f / hr", viewModel.hourlyRate))
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(Color.brandNavy)
+                            }
+                        }
+
+                        Stepper(value: $viewModel.laborHours, in: 0.5...40.0, step: 0.5) {
+                            HStack {
+                                Text("Labor Hours:")
+                                    .font(.appCaption)
+                                    .foregroundColor(.secondary)
+                                Text(String(format: "%.1f hrs", viewModel.laborHours))
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(Color.brandNavy)
+                            }
+                        }
+                    }
+                    .padding(10)
+                    .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                    .cornerRadius(8)
                 }
                 .padding(16)
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -365,32 +397,120 @@ struct ClerkSplitView: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .cornerRadius(12)
 
-                // 4. grand total card
-                VStack(spacing: 12) {
+                // 4. exportable official invoice summary card
+                VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Total Invoice Estimate")
-                                .font(.appCaption)
-                                .foregroundColor(.secondary)
-                            Text(viewModel.formattedGrandTotal)
-                                .font(.system(size: 28, weight: .bold, design: .rounded))
-                                .foregroundColor(Color.brandNavy)
-                        }
+                        Label("Commercial Invoice Preview", systemImage: "doc.plaintext.fill")
+                            .font(.appHeadline)
+                            .foregroundColor(Color.brandNavy)
 
                         Spacer()
 
+                        Text("Net 30")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(uiColor: .tertiarySystemFill))
+                            .cornerRadius(4)
+                    }
+
+                    Divider()
+
+                    // formal paper ticket preview
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("WHIRL DISPATCH HVAC SOLUTIONS")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.brandNavy)
+
+                        Text("Invoice #: \(viewModel.currentInvoiceNumber)")
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+
+                        Text("Client: \(order.facility?.facilityName ?? "Commercial Site")")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+
+                        Divider()
+
+                        HStack {
+                            Text("1. Certified HVAC Labor")
+                                .font(.system(size: 12))
+                            Spacer()
+                            Text(viewModel.formattedLaborSubtotal)
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        }
+
+                        HStack {
+                            Text("2. Materials (Markup \(Int(viewModel.partsMarkupPercent))%)")
+                                .font(.system(size: 12))
+                            Spacer()
+                            Text(viewModel.formattedPartsWithMarkup)
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        }
+
+                        HStack {
+                            Text("3. Fleet Equipment Fee")
+                                .font(.system(size: 12))
+                            Spacer()
+                            Text(viewModel.formattedEquipmentFee)
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        }
+
+                        HStack {
+                            Text("4. State Sales Tax (8%)")
+                                .font(.system(size: 12))
+                            Spacer()
+                            Text(viewModel.formattedTaxAmount)
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        }
+
+                        Divider()
+
+                        HStack {
+                            Text("TOTAL BALANCE DUE")
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            Spacer()
+                            Text(viewModel.formattedGrandTotal)
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundColor(Color.brandNavy)
+                        }
+                    }
+                    .padding(14)
+                    .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                    )
+
+                    // action buttons: share export & issue to client
+                    HStack(spacing: 12) {
+                        ShareLink(item: viewModel.invoiceExportText) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "square.and.arrow.up")
+                                Text("Share Export")
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                            .foregroundColor(Color.brandNavy)
+                            .cornerRadius(8)
+                        }
+
                         Button(action: {
+                            let generator = UINotificationFeedbackGenerator()
+                            generator.notificationOccurred(.success)
                             Task {
-                                await viewModel.generateBackendEstimate()
+                                await viewModel.issueInvoiceToClient()
                             }
                         }) {
                             HStack(spacing: 6) {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                Text("Re-Compile")
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Issue to Client")
                                     .fontWeight(.bold)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
                             .background(Color.brandNavy)
                             .foregroundColor(.white)
                             .cornerRadius(8)
