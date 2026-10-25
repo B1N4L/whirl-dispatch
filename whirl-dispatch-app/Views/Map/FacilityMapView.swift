@@ -17,18 +17,31 @@ struct FacilityMapView: View {
     @State private var errorMessage: String? = nil
 
     private let apiService = APIService.shared
+    private let locationManager = LocationManager.shared
+    private let geofenceService = GeofenceService.shared
 
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                // native swiftui map
+                // native swiftui map with geofence circular overlays
                 Map(position: $cameraPosition, selection: $selectedFacility) {
                     ForEach(facilities) { fac in
+                        // circular geofence perimeter boundary (150m-200m)
+                        MapCircle(center: fac.coordinate, radius: fac.geofenceRadius)
+                            .foregroundStyle(Color.accentBlue.opacity(0.18))
+                            .stroke(Color.accentBlue.opacity(0.7), lineWidth: 2)
+
+                        // custom interactive plant room facility pin
                         Annotation(fac.displayName, coordinate: fac.coordinate) {
                             facilityPin(fac)
                         }
                         .tag(fac)
+                    }
+
+                    // technician live location marker
+                    Annotation("My Location", coordinate: locationManager.effectiveCoordinate) {
+                        technicianLiveMarker
                     }
                 }
                 .mapStyle(mapStyleSelection == 0 ? .standard(elevation: .realistic) : .hybrid(elevation: .realistic))
@@ -83,6 +96,7 @@ struct FacilityMapView: View {
             .navigationTitle("Facility Fleet Map")
             .navigationBarTitleDisplayMode(.inline)
             .task {
+                locationManager.startUpdating()
                 await loadFacilities()
             }
         }
@@ -119,11 +133,29 @@ struct FacilityMapView: View {
         }
     }
 
+    private var technicianLiveMarker: some View {
+        ZStack {
+            Circle()
+                .fill(Color.statusGreen.opacity(0.25))
+                .frame(width: 32, height: 32)
+            Circle()
+                .fill(Color.statusGreen)
+                .frame(width: 14, height: 14)
+                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+        }
+    }
 
-    // MARK: - Facility Inspection Card
+
+    // MARK: - Facility Inspection Card with Geofence Status
 
     private func facilityInspectionCard(_ fac: Facility) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let eval = geofenceService.evaluate(
+            userCoordinate: locationManager.effectiveCoordinate,
+            facilityCoordinate: fac.coordinate,
+            radiusMeters: fac.geofenceRadius
+        )
+
+        return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(fac.companyName)
@@ -153,6 +185,19 @@ struct FacilityMapView: View {
                 }
             }
 
+            // geofence status callout badge
+            HStack(spacing: 8) {
+                Image(systemName: eval.isInside ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 12))
+                Text(eval.isInside ? "Within Geofence Perimeter (\(eval.formattedDistance))" : "Outside Geofence (\(eval.formattedDistance) away)")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundColor(eval.isInside ? Color.statusGreen : Color.statusAmber)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(eval.isInside ? Color.statusGreen.opacity(0.12) : Color.statusAmber.opacity(0.12))
+            .cornerRadius(6)
+
             Divider()
 
             HStack {
@@ -172,16 +217,17 @@ struct FacilityMapView: View {
                         .foregroundColor(.secondary)
                     Text("\(Int(fac.geofenceRadius))m Perimeter")
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundColor(Color.statusGreen)
+                        .foregroundColor(Color.accentBlue)
                 }
             }
 
-            HStack(spacing: 12) {
+            // action buttons
+            HStack(spacing: 10) {
                 // call site contact
                 Link(destination: URL(string: "tel:\(fac.contactPhone)")!) {
                     HStack(spacing: 6) {
                         Image(systemName: "phone.fill")
-                        Text("Call Site (\(fac.contactPersonName))")
+                        Text("Call Site")
                             .font(.system(size: 12, weight: .bold))
                     }
                     .frame(maxWidth: .infinity)
@@ -195,15 +241,35 @@ struct FacilityMapView: View {
                 Button(action: {
                     openInAppleMaps(fac)
                 }) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
                         Text("Directions")
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 10)
                     .padding(.vertical, 10)
                     .background(Color(uiColor: .tertiarySystemFill))
                     .foregroundColor(.primary)
+                    .cornerRadius(8)
+                }
+
+                // simulator testing toggle
+                Button(action: {
+                    if locationManager.isSimulatedLocationActive {
+                        locationManager.resetSimulation()
+                    } else {
+                        locationManager.simulateArrival(at: fac.coordinate)
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: locationManager.isSimulatedLocationActive ? "location.slash.fill" : "location.north.circle.fill")
+                        Text(locationManager.isSimulatedLocationActive ? "Reset GPS" : "Simulate")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 10)
+                    .background(Color(uiColor: .tertiarySystemFill))
+                    .foregroundColor(locationManager.isSimulatedLocationActive ? Color.statusAmber : Color.brandNavy)
                     .cornerRadius(8)
                 }
             }
