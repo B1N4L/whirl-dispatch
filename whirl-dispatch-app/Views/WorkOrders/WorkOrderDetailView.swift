@@ -15,6 +15,7 @@ struct WorkOrderDetailView: View {
     @State private var isPerformingTransition = false
     @State private var showingCompleteAlert = false
     @State private var showingRestrictionAlert = false
+    @State private var showingDossierSheet = false
     @State private var actionErrorMessage: String? = nil
     @State private var offlineManager = OfflineModeManager.shared
 
@@ -189,6 +190,47 @@ struct WorkOrderDetailView: View {
                 .padding(.horizontal, 16)
 
 
+                // diagnostic machinery dossier & proof button
+                VStack(spacing: 8) {
+                    Button(action: {
+                        showingDossierSheet = true
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "doc.text.image.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(Color.brandNavy)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Diagnostic Dossier & Checklist")
+                                    .font(.appHeadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+
+                                Text("Inspect HVAC pressures, motor amps & diagnostic items")
+                                    .font(.appCaption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.cardBackground)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.surfaceBorder, lineWidth: 1)
+                        )
+                    }
+                }
+                .padding(.horizontal, 16)
+
+
                 // option b: shielded plant room offline mode toggle
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Plant Room Connectivity")
@@ -277,6 +319,9 @@ struct WorkOrderDetailView: View {
             Button("Understood", role: .cancel) {}
         } message: {
             Text(offlineManager.restrictionErrorMessage ?? "You cannot enable offline mode outside the workplace site. You must arrive and clock in on-site first.")
+        }
+        .sheet(isPresented: $showingDossierSheet) {
+            DiagnosticDossierView(workOrder: order)
         }
     }
 

@@ -1,0 +1,321 @@
+//
+//  DiagnosticDossierView.swift
+//  whirl-dispatch-app
+//
+//  Created by Binal on 2026-10-25.
+//
+
+import SwiftUI
+
+struct DiagnosticDossierView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var viewModel: DossierViewModel
+
+
+    init(workOrder: WorkOrder) {
+        _viewModel = State(initialValue: DossierViewModel(workOrder: workOrder))
+    }
+
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // notification banner
+                    if let toast = viewModel.successToast {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(Color.statusGreen)
+                            Text(toast)
+                                .font(.appCaption)
+                            Spacer()
+                            Button(action: { viewModel.successToast = nil }) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(12)
+                        .background(Color.statusGreen.opacity(0.12))
+                        .cornerRadius(8)
+                    }
+
+                    // 1. equipment specification header card
+                    equipmentHeaderCard
+
+                    // 2. operational readings comparison card
+                    operationalReadingsCard
+
+                    // 3. diagnostic inspection checklist
+                    inspectionChecklistSection
+
+                    // 4. technician diagnostic notes
+                    technicianNotesCard
+
+                    // 5. save & sync action button
+                    Button(action: {
+                        Task {
+                            _ = await viewModel.saveDossier()
+                        }
+                    }) {
+                        HStack(spacing: 8) {
+                            if viewModel.isLoading {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Image(systemName: "square.and.arrow.down.fill")
+                                Text("Save Diagnostic Dossier")
+                                    .fontWeight(.bold)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.brandNavy)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                    .disabled(viewModel.isLoading)
+                    .padding(.top, 4)
+                }
+                .padding(16)
+            }
+            .background(Color(uiColor: .systemGroupedBackground))
+            .navigationTitle("Diagnostic Dossier")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .task {
+                await viewModel.loadDossier()
+            }
+        }
+    }
+
+
+    // MARK: - Subviews
+
+    private var equipmentHeaderCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(viewModel.workOrder.facility?.facilityName ?? "Commercial Plant Room")
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+
+                    Text(viewModel.workOrder.workOrderNumber)
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundColor(Color.brandNavy)
+                }
+
+                Spacer()
+
+                HStack(spacing: 6) {
+                    Image(systemName: "fan.oscillation.fill")
+                        .foregroundColor(Color.accentBlue)
+                    Text("HVAC Chiller")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.accentBlue.opacity(0.12))
+                .cornerRadius(6)
+            }
+
+            Divider()
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Equipment Model")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    TextField("Model", text: $viewModel.equipmentModel)
+                        .font(.system(size: 14, weight: .semibold))
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Serial Number")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    TextField("Serial", text: $viewModel.equipmentSerialNumber)
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .cornerRadius(12)
+    }
+
+
+    private var operationalReadingsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Operational Pressure & Electrical Metrics", systemImage: "gauge.with.needle.fill")
+                .font(.appHeadline)
+                .foregroundColor(Color.brandNavy)
+
+            Divider()
+
+            // 3-column table: metric, baseline before, post-service
+            VStack(spacing: 8) {
+                HStack {
+                    Text("Metric")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text("Before")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(Color.statusAmber)
+                        .frame(width: 80, alignment: .trailing)
+
+                    Text("After Service")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(Color.statusGreen)
+                        .frame(width: 90, alignment: .trailing)
+                }
+
+                Divider()
+
+                metricInputRow(label: "Suction PSI", before: $viewModel.baselineSuctionPsi, after: $viewModel.postSuctionPsi)
+                metricInputRow(label: "Discharge PSI", before: $viewModel.baselineDischargePsi, after: $viewModel.postDischargePsi)
+                metricInputRow(label: "Motor Running (A)", before: $viewModel.baselineMotorAmps, after: $viewModel.postMotorAmps)
+            }
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .cornerRadius(12)
+    }
+
+    private func metricInputRow(label: String, before: Binding<String>, after: Binding<String>) -> some View {
+        HStack {
+            Text(label)
+                .font(.appSubheadline)
+                .foregroundColor(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            TextField("0.0", text: before)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .frame(width: 75)
+                .padding(4)
+                .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                .cornerRadius(6)
+
+            TextField("0.0", text: after)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundColor(Color.statusGreen)
+                .frame(width: 85)
+                .padding(4)
+                .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                .cornerRadius(6)
+        }
+    }
+
+
+    private var inspectionChecklistSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Machinery Diagnostic Checklist", systemImage: "checklist")
+                    .font(.appHeadline)
+                    .foregroundColor(Color.brandNavy)
+
+                Spacer()
+
+                Text("\(viewModel.completedChecklistCount) / \(viewModel.totalChecklistCount)")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundColor(viewModel.checklistProgress == 1.0 ? Color.statusGreen : Color.brandNavy)
+            }
+
+            // progress bar
+            ProgressView(value: viewModel.checklistProgress)
+                .tint(viewModel.checklistProgress == 1.0 ? Color.statusGreen : Color.brandNavy)
+
+            Divider()
+
+            ForEach(ChecklistCategory.allCases) { cat in
+                let items = viewModel.checklistItems.filter { $0.category == cat }
+                if !items.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 6) {
+                            Image(systemName: cat.iconName)
+                                .font(.system(size: 12))
+                                .foregroundColor(Color.brandNavy)
+                            Text(cat.title)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(Color.brandNavy)
+                        }
+                        .padding(.top, 4)
+
+                        ForEach(items) { item in
+                            checklistItemRow(item)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .cornerRadius(12)
+    }
+
+    private func checklistItemRow(_ item: DossierChecklistItem) -> some View {
+        Button(action: {
+            viewModel.toggleChecklistItem(id: item.id)
+        }) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: item.isChecked ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 18))
+                    .foregroundColor(item.isChecked ? Color.statusGreen : Color.secondary)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.itemLabel)
+                        .font(.system(size: 13))
+                        .foregroundColor(item.isChecked ? .secondary : .primary)
+                        .strikethrough(item.isChecked, color: .secondary)
+
+                    if let notes = item.notes {
+                        Text(notes)
+                            .font(.caption2)
+                            .foregroundColor(Color.statusGreen)
+                    }
+                }
+
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 3)
+    }
+
+
+    private var technicianNotesCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Technician Diagnostic Summary", systemImage: "note.text")
+                .font(.appHeadline)
+                .foregroundColor(Color.brandNavy)
+
+            TextField("Enter plant room findings, replaced gaskets, or valve adjustments...", text: $viewModel.diagnosticNotes, axis: .vertical)
+                .lineLimit(3...6)
+                .padding(10)
+                .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                .cornerRadius(8)
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .cornerRadius(12)
+    }
+}
