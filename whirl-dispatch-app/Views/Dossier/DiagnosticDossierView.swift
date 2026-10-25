@@ -11,6 +11,7 @@ struct DiagnosticDossierView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: DossierViewModel
     @State private var isShowingPhotoCapture: Bool = false
+    @State private var selectedInspectionPhoto: CapturedProofPhoto? = nil
 
 
     init(workOrder: WorkOrder) {
@@ -47,16 +48,19 @@ struct DiagnosticDossierView: View {
                     // 2. operational readings comparison card
                     operationalReadingsCard
 
-                    // 3. diagnostic inspection checklist
+                    // 3. before and after proof comparison preview
+                    beforeAfterComparisonCard
+
+                    // 4. diagnostic inspection checklist
                     inspectionChecklistSection
 
-                    // 4. photo proofs & evidence
+                    // 5. photo proofs & evidence
                     photoEvidenceSection
 
-                    // 5. technician diagnostic notes
+                    // 6. technician diagnostic notes
                     technicianNotesCard
 
-                    // 6. save & sync action button
+                    // 7. save & sync action button
                     Button(action: {
                         Task {
                             _ = await viewModel.saveDossier()
@@ -100,6 +104,9 @@ struct DiagnosticDossierView: View {
                 CameraPhotoCaptureView { proof in
                     viewModel.attachCapturedPhoto(proof)
                 }
+            }
+            .sheet(item: $selectedInspectionPhoto) { photo in
+                PhotoInspectionSheet(photo: photo)
             }
         }
     }
@@ -234,6 +241,127 @@ struct DiagnosticDossierView: View {
     }
 
 
+    private var beforeAfterComparisonCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Before & After Service Proof", systemImage: "arrow.left.and.right.square.fill")
+                    .font(.appHeadline)
+                    .foregroundColor(Color.brandNavy)
+
+                Spacer()
+
+                Text("0.7x JPEG")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.statusGreen.opacity(0.15))
+                    .foregroundColor(Color.statusGreen)
+                    .cornerRadius(4)
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                // Before side
+                VStack(spacing: 6) {
+                    Text("BEFORE SERVICE")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(Color.statusAmber)
+
+                    if let before = viewModel.beforeServicePhoto {
+                        Button(action: {
+                            selectedInspectionPhoto = before
+                        }) {
+                            Image(uiImage: before.image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 105)
+                                .frame(maxWidth: .infinity)
+                                .cornerRadius(8)
+                                .clipped()
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.statusAmber.opacity(0.6), lineWidth: 1.5)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+                            .frame(height: 105)
+                            .overlay(
+                                VStack(spacing: 4) {
+                                    Image(systemName: "camera.badge.ellipsis")
+                                        .foregroundColor(.secondary)
+                                    Text("No Pre-Service Photo")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            )
+                    }
+
+                    Text("Suction: \(viewModel.baselineSuctionPsi) PSI")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+
+                // Divider arrow
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.secondary)
+
+                // After side
+                VStack(spacing: 6) {
+                    Text("AFTER SERVICE")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(Color.statusGreen)
+
+                    if let after = viewModel.afterServicePhoto {
+                        Button(action: {
+                            selectedInspectionPhoto = after
+                        }) {
+                            Image(uiImage: after.image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 105)
+                                .frame(maxWidth: .infinity)
+                                .cornerRadius(8)
+                                .clipped()
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.statusGreen.opacity(0.6), lineWidth: 1.5)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+                            .frame(height: 105)
+                            .overlay(
+                                VStack(spacing: 4) {
+                                    Image(systemName: "camera.badge.ellipsis")
+                                        .foregroundColor(.secondary)
+                                    Text("No Post-Service Photo")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            )
+                    }
+
+                    Text("Suction: \(viewModel.postSuctionPsi) PSI")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(Color.statusGreen)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .cornerRadius(12)
+    }
+
+
     private var inspectionChecklistSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -348,12 +476,21 @@ struct DiagnosticDossierView: View {
             } else {
                 ForEach(viewModel.capturedPhotos) { photo in
                     HStack(spacing: 12) {
-                        Image(uiImage: photo.image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 60, height: 60)
-                            .cornerRadius(8)
-                            .clipped()
+                        Button(action: {
+                            selectedInspectionPhoto = photo
+                        }) {
+                            Image(uiImage: photo.image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 62, height: 62)
+                                .cornerRadius(8)
+                                .clipped()
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
 
                         VStack(alignment: .leading, spacing: 3) {
                             HStack {
@@ -361,11 +498,15 @@ struct DiagnosticDossierView: View {
                                     .font(.system(size: 11, weight: .bold))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(Color.brandNavy.opacity(0.12))
-                                    .foregroundColor(Color.brandNavy)
+                                    .background(photo.photoType == .postServiceAfter ? Color.statusGreen.opacity(0.15) : (photo.photoType == .baselineBefore ? Color.statusAmber.opacity(0.15) : Color.brandNavy.opacity(0.12)))
+                                    .foregroundColor(photo.photoType == .postServiceAfter ? Color.statusGreen : (photo.photoType == .baselineBefore ? Color.statusAmber : Color.brandNavy))
                                     .cornerRadius(4)
 
                                 Spacer()
+
+                                Text(photo.formattedCompressionSavings)
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundColor(Color.statusGreen)
 
                                 Button(action: {
                                     viewModel.removeCapturedPhoto(id: photo.id)

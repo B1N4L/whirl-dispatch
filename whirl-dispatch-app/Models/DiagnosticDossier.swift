@@ -83,6 +83,17 @@ struct CapturedProofPhoto: Identifiable, Equatable {
     let longitude: Double?
     var notes: String?
     var compressedData: Data?
+    var originalByteSize: Int?
+    var compressedByteSize: Int?
+
+    var formattedCompressionSavings: String {
+        guard let orig = originalByteSize, let comp = compressedByteSize, orig > 0 else {
+            return "JPEG 0.7x"
+        }
+        let compKb = comp / 1024
+        let savedPct = max(0, Int((1.0 - Double(comp) / Double(orig)) * 100))
+        return "\(compKb) KB (\(savedPct)% saved)"
+    }
 
     static func == (lhs: CapturedProofPhoto, rhs: CapturedProofPhoto) -> Bool {
         lhs.id == rhs.id && lhs.photoType == rhs.photoType && lhs.notes == rhs.notes

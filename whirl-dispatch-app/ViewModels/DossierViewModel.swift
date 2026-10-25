@@ -51,14 +51,41 @@ final class DossierViewModel {
         setupSamplePhotosIfEmpty()
     }
 
+    // compress image with 0.7 quality factor
+    func compressImage(_ image: UIImage, quality: CGFloat = 0.7) -> (data: Data, originalBytes: Int, compressedBytes: Int)? {
+        guard let originalData = image.jpegData(compressionQuality: 1.0),
+              let compressedData = image.jpegData(compressionQuality: quality) else {
+            return nil
+        }
+        return (compressedData, originalData.count, compressedData.count)
+    }
+
     func attachCapturedPhoto(_ photo: CapturedProofPhoto) {
-        capturedPhotos.append(photo)
+        var updated = photo
+        if let result = compressImage(photo.image, quality: 0.7) {
+            updated.compressedData = result.data
+            updated.originalByteSize = result.originalBytes
+            updated.compressedByteSize = result.compressedBytes
+        }
+        capturedPhotos.append(updated)
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
     }
 
     func removeCapturedPhoto(id: String) {
         capturedPhotos.removeAll { $0.id == id }
+    }
+
+    var beforeServicePhoto: CapturedProofPhoto? {
+        capturedPhotos.first(where: { $0.photoType == .baselineBefore })
+    }
+
+    var afterServicePhoto: CapturedProofPhoto? {
+        capturedPhotos.first(where: { $0.photoType == .postServiceAfter })
+    }
+
+    var defectEvidencePhotos: [CapturedProofPhoto] {
+        capturedPhotos.filter { $0.photoType == .defectEvidence || $0.photoType == .replacedPart }
     }
 
 
@@ -245,36 +272,100 @@ final class DossierViewModel {
     private func setupSamplePhotosIfEmpty() {
         if capturedPhotos.isEmpty {
             let renderer = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 260))
-            let img = renderer.image { ctx in
+
+            // 1. baseline before service photo
+            let beforeImg = renderer.image { ctx in
+                UIColor(red: 0.15, green: 0.18, blue: 0.22, alpha: 1.0).setFill()
+                ctx.fill(CGRect(x: 0, y: 0, width: 400, height: 260))
+
+                let title = "BEFORE: Carrier 30MP Condenser Coil"
+                let sub = "Heavy lime scale & bent aluminum heat-exchange fins"
+                let titleAttrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.boldSystemFont(ofSize: 14),
+                    .foregroundColor: UIColor.systemOrange
+                ]
+                let subAttrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 11),
+                    .foregroundColor: UIColor.white.withAlphaComponent(0.8)
+                ]
+
+                title.draw(in: CGRect(x: 20, y: 100, width: 360, height: 24), withAttributes: titleAttrs)
+                sub.draw(in: CGRect(x: 20, y: 128, width: 360, height: 36), withAttributes: subAttrs)
+            }
+
+            // 2. post-service after photo
+            let afterImg = renderer.image { ctx in
+                UIColor(red: 0.08, green: 0.22, blue: 0.18, alpha: 1.0).setFill()
+                ctx.fill(CGRect(x: 0, y: 0, width: 400, height: 260))
+
+                let title = "AFTER: Carrier 30MP Condenser Coil"
+                let sub = "Chemical flush complete & microchannels straightened"
+                let titleAttrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.boldSystemFont(ofSize: 14),
+                    .foregroundColor: UIColor.systemGreen
+                ]
+                let subAttrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 11),
+                    .foregroundColor: UIColor.white.withAlphaComponent(0.8)
+                ]
+
+                title.draw(in: CGRect(x: 20, y: 100, width: 360, height: 24), withAttributes: titleAttrs)
+                sub.draw(in: CGRect(x: 20, y: 128, width: 360, height: 36), withAttributes: subAttrs)
+            }
+
+            // 3. defect evidence photo
+            let defectImg = renderer.image { ctx in
                 UIColor(Color.brandNavy).setFill()
                 ctx.fill(CGRect(x: 0, y: 0, width: 400, height: 260))
 
-                let title = "Carrier 30MP Condenser Coil"
-                let sub = "Damage Proof - Microchannel hairline bend"
+                let title = "DEFECT: 3-Phase Contactor Pitting"
+                let sub = "Arc burns identified on L2 terminal lug"
                 let titleAttrs: [NSAttributedString.Key: Any] = [
-                    .font: UIFont.boldSystemFont(ofSize: 15),
+                    .font: UIFont.boldSystemFont(ofSize: 14),
                     .foregroundColor: UIColor.white
                 ]
                 let subAttrs: [NSAttributedString.Key: Any] = [
-                    .font: UIFont.systemFont(ofSize: 12),
+                    .font: UIFont.systemFont(ofSize: 11),
                     .foregroundColor: UIColor.lightGray
                 ]
 
                 title.draw(in: CGRect(x: 20, y: 100, width: 360, height: 24), withAttributes: titleAttrs)
-                sub.draw(in: CGRect(x: 20, y: 128, width: 360, height: 20), withAttributes: subAttrs)
+                sub.draw(in: CGRect(x: 20, y: 128, width: 360, height: 36), withAttributes: subAttrs)
             }
 
-            capturedPhotos.append(
-                CapturedProofPhoto(
-                    id: "demo-proof-01",
-                    photoType: .defectEvidence,
-                    image: img,
-                    capturedTimestamp: Date().addingTimeInterval(-1800),
-                    latitude: 6.9271,
-                    longitude: 79.8612,
-                    notes: "Coil micro-channel bent during heavy rooftop cross-wind"
-                )
+            let beforePhoto = CapturedProofPhoto(
+                id: "demo-proof-before",
+                photoType: .baselineBefore,
+                image: beforeImg,
+                capturedTimestamp: Date().addingTimeInterval(-7200),
+                latitude: 6.9271,
+                longitude: 79.8612,
+                notes: "Initial pre-service condition. Airflow restricted by 40%."
             )
+
+            let afterPhoto = CapturedProofPhoto(
+                id: "demo-proof-after",
+                photoType: .postServiceAfter,
+                image: afterImg,
+                capturedTimestamp: Date().addingTimeInterval(-600),
+                latitude: 6.9271,
+                longitude: 79.8612,
+                notes: "Restored laminar airflow. Static pressure drop normalized."
+            )
+
+            let defectPhoto = CapturedProofPhoto(
+                id: "demo-proof-defect",
+                photoType: .defectEvidence,
+                image: defectImg,
+                capturedTimestamp: Date().addingTimeInterval(-3600),
+                latitude: 6.9271,
+                longitude: 79.8612,
+                notes: "Burn marks on contact points causing intermittent phase drop."
+            )
+
+            attachCapturedPhoto(beforePhoto)
+            attachCapturedPhoto(afterPhoto)
+            attachCapturedPhoto(defectPhoto)
         }
     }
 }
