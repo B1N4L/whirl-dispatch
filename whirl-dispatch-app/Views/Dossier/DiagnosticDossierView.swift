@@ -10,6 +10,7 @@ import SwiftUI
 struct DiagnosticDossierView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: DossierViewModel
+    @State private var isShowingPhotoCapture: Bool = false
 
 
     init(workOrder: WorkOrder) {
@@ -49,10 +50,13 @@ struct DiagnosticDossierView: View {
                     // 3. diagnostic inspection checklist
                     inspectionChecklistSection
 
-                    // 4. technician diagnostic notes
+                    // 4. photo proofs & evidence
+                    photoEvidenceSection
+
+                    // 5. technician diagnostic notes
                     technicianNotesCard
 
-                    // 5. save & sync action button
+                    // 6. save & sync action button
                     Button(action: {
                         Task {
                             _ = await viewModel.saveDossier()
@@ -91,6 +95,11 @@ struct DiagnosticDossierView: View {
             }
             .task {
                 await viewModel.loadDossier()
+            }
+            .sheet(isPresented: $isShowingPhotoCapture) {
+                CameraPhotoCaptureView { proof in
+                    viewModel.attachCapturedPhoto(proof)
+                }
             }
         }
     }
@@ -299,6 +308,103 @@ struct DiagnosticDossierView: View {
         }
         .buttonStyle(.plain)
         .padding(.vertical, 3)
+    }
+
+
+    private var photoEvidenceSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Photo Evidence & Proofs", systemImage: "camera.fill")
+                    .font(.appHeadline)
+                    .foregroundColor(Color.brandNavy)
+
+                Spacer()
+
+                Button(action: {
+                    isShowingPhotoCapture = true
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Add Proof")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(Color.brandNavy)
+                }
+            }
+
+            Divider()
+
+            if viewModel.capturedPhotos.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "photo.badge.plus")
+                        .font(.system(size: 28))
+                        .foregroundColor(.secondary)
+                    Text("No proof photos attached yet.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+            } else {
+                ForEach(viewModel.capturedPhotos) { photo in
+                    HStack(spacing: 12) {
+                        Image(uiImage: photo.image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 60, height: 60)
+                            .cornerRadius(8)
+                            .clipped()
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text(photo.photoType.label)
+                                    .font(.system(size: 11, weight: .bold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.brandNavy.opacity(0.12))
+                                    .foregroundColor(Color.brandNavy)
+                                    .cornerRadius(4)
+
+                                Spacer()
+
+                                Button(action: {
+                                    viewModel.removeCapturedPhoto(id: photo.id)
+                                }) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+
+                            if let notes = photo.notes {
+                                Text(notes)
+                                    .font(.system(size: 12))
+                                    .lineLimit(2)
+                                    .foregroundColor(.primary)
+                            }
+
+                            HStack {
+                                Text(photo.capturedTimestamp.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+
+                                if let lat = photo.latitude, let lon = photo.longitude {
+                                    Text("• \(String(format: "%.3f, %.3f", lat, lon))")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .padding(10)
+                    .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                    .cornerRadius(8)
+                }
+            }
+        }
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .cornerRadius(12)
     }
 
 

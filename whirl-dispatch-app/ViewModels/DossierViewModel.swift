@@ -30,6 +30,7 @@ final class DossierViewModel {
     var diagnosticNotes: String = ""
     var checklistItems: [DossierChecklistItem] = []
     var photos: [DossierPhoto] = []
+    var capturedPhotos: [CapturedProofPhoto] = []
 
     var isLoading: Bool = false
     var errorMessage: String? = nil
@@ -47,6 +48,17 @@ final class DossierViewModel {
         self.apiService = apiService ?? .shared
         self.offlineManager = offlineManager ?? .shared
         setupStandardChecklist()
+        setupSamplePhotosIfEmpty()
+    }
+
+    func attachCapturedPhoto(_ photo: CapturedProofPhoto) {
+        capturedPhotos.append(photo)
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+    }
+
+    func removeCapturedPhoto(id: String) {
+        capturedPhotos.removeAll { $0.id == id }
     }
 
 
@@ -227,5 +239,42 @@ final class DossierViewModel {
                 notes: nil
             )
         ]
+    }
+
+
+    private func setupSamplePhotosIfEmpty() {
+        if capturedPhotos.isEmpty {
+            let renderer = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 260))
+            let img = renderer.image { ctx in
+                UIColor(Color.brandNavy).setFill()
+                ctx.fill(CGRect(x: 0, y: 0, width: 400, height: 260))
+
+                let title = "Carrier 30MP Condenser Coil"
+                let sub = "Damage Proof - Microchannel hairline bend"
+                let titleAttrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.boldSystemFont(ofSize: 15),
+                    .foregroundColor: UIColor.white
+                ]
+                let subAttrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 12),
+                    .foregroundColor: UIColor.lightGray
+                ]
+
+                title.draw(in: CGRect(x: 20, y: 100, width: 360, height: 24), withAttributes: titleAttrs)
+                sub.draw(in: CGRect(x: 20, y: 128, width: 360, height: 20), withAttributes: subAttrs)
+            }
+
+            capturedPhotos.append(
+                CapturedProofPhoto(
+                    id: "demo-proof-01",
+                    photoType: .defectEvidence,
+                    image: img,
+                    capturedTimestamp: Date().addingTimeInterval(-1800),
+                    latitude: 6.9271,
+                    longitude: 79.8612,
+                    notes: "Coil micro-channel bent during heavy rooftop cross-wind"
+                )
+            )
+        }
     }
 }

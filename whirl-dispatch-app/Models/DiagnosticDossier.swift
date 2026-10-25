@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 
 enum PhotoType: String, Codable, CaseIterable {
     case baselineBefore = "BASELINE_BEFORE"
@@ -69,6 +70,23 @@ struct DossierPhoto: Identifiable, Codable, Equatable {
     let capturedTimestamp: String?
     let latitude: Double?
     let longitude: Double?
+}
+
+
+// local device captured photo model with geotagging
+struct CapturedProofPhoto: Identifiable, Equatable {
+    let id: String
+    var photoType: PhotoType
+    var image: UIImage
+    let capturedTimestamp: Date
+    let latitude: Double?
+    let longitude: Double?
+    var notes: String?
+    var compressedData: Data?
+
+    static func == (lhs: CapturedProofPhoto, rhs: CapturedProofPhoto) -> Bool {
+        lhs.id == rhs.id && lhs.photoType == rhs.photoType && lhs.notes == rhs.notes
+    }
 }
 
 
