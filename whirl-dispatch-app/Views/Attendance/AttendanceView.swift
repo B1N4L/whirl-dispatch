@@ -54,6 +54,7 @@ struct AttendanceView: View {
                                 ForEach(viewModel.assignedWorkOrders) { order in
                                     Button(action: {
                                         viewModel.selectedWorkOrder = order
+                                        _ = viewModel.evaluateGeofence()
                                     }) {
                                         HStack {
                                             Text("\(order.workOrderNumber): \(order.facility?.facilityName ?? order.title)")
@@ -95,6 +96,57 @@ struct AttendanceView: View {
                         }
                     }
                     .padding(.horizontal, 16)
+
+
+                    // geofence anti-ghost clocking validation card
+                    if let eval = viewModel.geofenceEvaluation {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: eval.isInside ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(eval.isInside ? Color.statusGreen : Color.statusAmber)
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(eval.isInside ? "On-Site Perimeter Verified (\(eval.formattedDistance))" : "Anti-Ghost Geofence Warning")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(eval.isInside ? Color.statusGreen : Color.statusAmber)
+
+                                Text(eval.isInside
+                                     ? "Within \(Int(eval.radiusMeters))m plant room boundary. Shift clock-in authorized."
+                                     : "You are \(eval.formattedDistance) away. Anti-ghost clocking requires being within \(Int(eval.radiusMeters))m.")
+                                    .font(.appCaption)
+                                    .foregroundColor(.secondary)
+
+                                // testing simulator button for emulator verification
+                                if !eval.isInside {
+                                    Button(action: {
+                                        viewModel.simulateArrivalAtCurrentFacility()
+                                    }) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "location.north.circle.fill")
+                                            Text("Simulate Site Arrival (Testing)")
+                                                .font(.system(size: 11, weight: .bold))
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Color.accentBlue.opacity(0.12))
+                                        .foregroundColor(Color.accentBlue)
+                                        .cornerRadius(6)
+                                    }
+                                    .padding(.top, 4)
+                                }
+                            }
+
+                            Spacer()
+                        }
+                        .padding(12)
+                        .background(eval.isInside ? Color.statusGreen.opacity(0.08) : Color.statusAmber.opacity(0.08))
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(eval.isInside ? Color.statusGreen.opacity(0.3) : Color.statusAmber.opacity(0.3), lineWidth: 1)
+                        )
+                        .padding(.horizontal, 16)
+                    }
 
 
                     // central clock dial button
@@ -222,7 +274,9 @@ struct AttendanceView: View {
             .background(Color(UIColor.systemGroupedBackground))
             .navigationTitle("Site Attendance")
             .task {
+                LocationManager.shared.startUpdating()
                 await viewModel.loadAttendanceData()
+                viewModel.evaluateGeofence()
             }
             .confirmationDialog(
                 "Clock Out of Shift?",

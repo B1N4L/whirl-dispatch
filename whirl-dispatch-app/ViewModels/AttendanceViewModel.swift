@@ -24,20 +24,27 @@ final class AttendanceViewModel {
 
     var isLoading: Bool = false
     var errorMessage: String? = nil
+    var geofenceEvaluation: GeofenceEvaluation? = nil
 
     private var shiftTimer: Timer? = nil
     private let apiService: APIService
     private let offlineStorage: OfflineStorageService
     private let offlineManager: OfflineModeManager
+    private let locationManager: LocationManager
+    private let geofenceService: GeofenceService
 
     init(
         apiService: APIService? = nil,
         offlineStorage: OfflineStorageService? = nil,
-        offlineManager: OfflineModeManager? = nil
+        offlineManager: OfflineModeManager? = nil,
+        locationManager: LocationManager? = nil,
+        geofenceService: GeofenceService? = nil
     ) {
         self.apiService = apiService ?? .shared
         self.offlineStorage = offlineStorage ?? .shared
         self.offlineManager = offlineManager ?? .shared
+        self.locationManager = locationManager ?? .shared
+        self.geofenceService = geofenceService ?? .shared
     }
 
 
@@ -106,18 +113,56 @@ final class AttendanceViewModel {
     }
 
 
-    // clock in to facility job site
+    // evaluate technician distance against active facility geofence
+    @discardableResult
+    func evaluateGeofence() -> GeofenceEvaluation? {
+        guard let order = selectedWorkOrder, let facility = order.facility else {
+            geofenceEvaluation = nil
+            return nil
+        }
+
+        let eval = geofenceService.evaluate(
+            userCoordinate: locationManager.effectiveCoordinate,
+            facilityCoordinate: facility.coordinate,
+            radiusMeters: facility.geofenceRadius
+        )
+        self.geofenceEvaluation = eval
+        return eval
+    }
+
+    func simulateArrivalAtCurrentFacility() {
+        guard let fac = selectedWorkOrder?.facility else { return }
+        locationManager.simulateArrival(at: fac.coordinate)
+        _ = evaluateGeofence()
+    }
+
+    func resetSimulation() {
+        locationManager.resetSimulation()
+        _ = evaluateGeofence()
+    }
+
+
+    // clock in to facility job site with anti-ghost clocking validation
     func clockIn() async -> Bool {
       guard let order = selectedWorkOrder else {
           errorMessage = "Please select an assigned work order before clocking in."
           return false
       }
 
+      // anti-ghost clocking geofence verification
+      let eval = evaluateGeofence()
+      if let eval = eval, !eval.isInside {
+          let facilityName = order.facility?.facilityName ?? "the commercial facility"
+          errorMessage = "Anti-Ghost Clocking Violation: You are \(eval.formattedDistance) away from \(facilityName). You must be within the \(Int(eval.radiusMeters))m perimeter to start shift."
+          return false
+      }
+
       isLoading = true
       errorMessage = nil
 
-      let lat = order.facility?.latitude ?? 6.9175
-      let lng = order.facility?.longitude ?? 79.8580
+      let techCoord = locationManager.effectiveCoordinate
+      let lat = techCoord.latitude
+      let lng = techCoord.longitude
 
       if offlineManager.isPlantRoomOffline {
           // record offline clock in locally in core data
