@@ -455,6 +455,52 @@ struct WorkOrderDetailView: View {
                 }
             }
 
+            if calendarSyncService.isOrderSynced(order.id) {
+                // alarms and location telemetry pills
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bell.fill")
+                                .font(.system(size: 10))
+                            Text("Alarm: -60m departure")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.accentBlue.opacity(0.12))
+                        .foregroundColor(Color.accentBlue)
+                        .cornerRadius(6)
+
+                        HStack(spacing: 4) {
+                            Image(systemName: "bell.badge.waveform.fill")
+                                .font(.system(size: 10))
+                            Text("Alarm: -15m arrival")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.statusAmber.opacity(0.15))
+                        .foregroundColor(Color.statusAmber)
+                        .cornerRadius(6)
+                    }
+
+                    if let fac = order.facility {
+                        HStack(spacing: 4) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 10))
+                            Text("Geotagged: \(fac.facilityName) (150m boundary)")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.secondary.opacity(0.1))
+                        .foregroundColor(.secondary)
+                        .cornerRadius(6)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(calendarSyncService.isOrderSynced(order.id) ? "Scheduled in Native Calendar" : "Sync Dispatch to Calendar")
@@ -467,28 +513,50 @@ struct WorkOrderDetailView: View {
 
                 Spacer()
 
-                Button(action: {
-                    Task {
-                        do {
-                            _ = try await calendarSyncService.syncWorkOrderToCalendar(order)
-                            let haptic = UINotificationFeedbackGenerator()
-                            haptic.notificationOccurred(.success)
-                            calendarSyncToast = "Work order synchronized to iOS Calendar."
-                        } catch {
-                            calendarSyncToast = "Calendar sync failed: \(error.localizedDescription)"
+                HStack(spacing: 8) {
+                    if calendarSyncService.isOrderSynced(order.id) {
+                        Button(role: .destructive, action: {
+                            Task {
+                                do {
+                                    try await calendarSyncService.removeWorkOrderFromCalendar(workOrderId: order.id)
+                                    calendarSyncToast = "Work order removed from iOS Calendar."
+                                } catch {
+                                    calendarSyncToast = "Remove failed: \(error.localizedDescription)"
+                                }
+                            }
+                        }) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 13))
+                                .foregroundColor(.red)
+                                .padding(8)
+                                .background(Color.red.opacity(0.1))
+                                .cornerRadius(8)
                         }
                     }
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: calendarSyncService.isOrderSynced(order.id) ? "arrow.triangle.2.circlepath" : "calendar.badge.plus")
-                        Text(calendarSyncService.isOrderSynced(order.id) ? "Update" : "Add to Calendar")
-                            .font(.system(size: 12, weight: .semibold))
+
+                    Button(action: {
+                        Task {
+                            do {
+                                _ = try await calendarSyncService.syncWorkOrderToCalendar(order)
+                                let haptic = UINotificationFeedbackGenerator()
+                                haptic.notificationOccurred(.success)
+                                calendarSyncToast = "Work order synchronized with automated alarms."
+                            } catch {
+                                calendarSyncToast = "Calendar sync failed: \(error.localizedDescription)"
+                            }
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: calendarSyncService.isOrderSynced(order.id) ? "arrow.triangle.2.circlepath" : "calendar.badge.plus")
+                            Text(calendarSyncService.isOrderSynced(order.id) ? "Update" : "Add to Calendar")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.brandNavy)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.brandNavy)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
                 }
             }
         }

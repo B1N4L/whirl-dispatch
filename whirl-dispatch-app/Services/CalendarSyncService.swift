@@ -7,6 +7,7 @@
 
 import Foundation
 import EventKit
+import CoreLocation
 import Observation
 
 @Observable
@@ -17,9 +18,11 @@ final class CalendarSyncService: @unchecked Sendable {
     var lastSyncedEventId: String? = nil
     var syncErrorMessage: String? = nil
     var syncedWorkOrderIds: Set<String> = []
+    private var orderToEventMap: [String: String] = [:]
 
     private let eventStore = EKEventStore()
     private let userDefaultsKey = "WhirlDispatch_SyncedCalendarEvents"
+    private let mapDefaultsKey = "WhirlDispatch_OrderToEventMap"
 
 
     init() {
@@ -113,10 +116,24 @@ final class CalendarSyncService: @unchecked Sendable {
             notesContent += "Site Address: \(fac.address)\n"
             notesContent += "Site Contact: \(fac.contactPersonName) (\(fac.contactPhone))\n"
             event.location = "\(fac.facilityName), \(fac.address)"
+
+            // structured location with facility geofence coordinates
+            let structuredLocation = EKStructuredLocation(title: fac.facilityName)
+            structuredLocation.geoLocation = CLLocation(latitude: fac.latitude, longitude: fac.longitude)
+            structuredLocation.radius = fac.geofenceRadius > 0 ? fac.geofenceRadius : 150.0
+            event.structuredLocation = structuredLocation
         }
 
         notesContent += "\nScope of Work:\n\(workOrder.description)\n"
         event.notes = notesContent
+
+        // automated reminder alarms: 1 hour pre-departure & 15 min plant room arrival
+        let departureAlarm = EKAlarm(relativeOffset: -3600)
+        let arrivalAlarm = EKAlarm(relativeOffset: -900)
+        event.alarms = [departureAlarm, arrivalAlarm]
+
+        // deep link url to whirl dispatch native work order details
+        event.url = URL(string: "whirldispatch://workorders/\(workOrder.id)")
 
         try eventStore.save(event, span: .thisEvent, commit: true)
 
@@ -124,10 +141,26 @@ final class CalendarSyncService: @unchecked Sendable {
         await MainActor.run {
             self.lastSyncedEventId = eventIdentifier
             self.syncedWorkOrderIds.insert(workOrder.id)
+            self.orderToEventMap[workOrder.id] = eventIdentifier
             self.persistSyncedIds()
         }
 
         return eventIdentifier
+    }
+
+
+    // remove calendar entry when cancelled or reassigned
+    func removeWorkOrderFromCalendar(workOrderId: String) async throws {
+        if let eventId = orderToEventMap[workOrderId],
+           let event = eventStore.event(withIdentifier: eventId) {
+            try eventStore.remove(event, span: .thisEvent, commit: true)
+        }
+
+        await MainActor.run {
+            self.syncedWorkOrderIds.remove(workOrderId)
+            self.orderToEventMap.removeValue(forKey: workOrderId)
+            self.persistSyncedIds()
+        }
     }
 
 
@@ -158,9 +191,13 @@ final class CalendarSyncService: @unchecked Sendable {
         if let saved = UserDefaults.standard.array(forKey: userDefaultsKey) as? [String] {
             self.syncedWorkOrderIds = Set(saved)
         }
+        if let map = UserDefaults.standard.dictionary(forKey: mapDefaultsKey) as? [String: String] {
+            self.orderToEventMap = map
+        }
     }
 
     private func persistSyncedIds() {
         UserDefaults.standard.set(Array(syncedWorkOrderIds), forKey: userDefaultsKey)
+        UserDefaults.standard.set(orderToEventMap, forKey: mapDefaultsKey)
     }
 }
