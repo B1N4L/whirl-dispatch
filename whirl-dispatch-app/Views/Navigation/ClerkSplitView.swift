@@ -72,7 +72,7 @@ struct ClerkSplitView: View {
                         approvedExpensesContentList
 
                     case .revenueTelemetry:
-                        telemetryPlaceholderList
+                        telemetryContentList
 
                     case .profile:
                         ProfileTabView(authVM: authVM)
@@ -104,17 +104,7 @@ struct ClerkSplitView: View {
                         approvedExpensesDetailPane
 
                     case .revenueTelemetry:
-                        VStack(spacing: 16) {
-                            Image(systemName: "chart.bar.xaxis")
-                                .font(.system(size: 56))
-                                .foregroundColor(Color.accentBlue)
-                            Text("Swift Charts Financial Telemetry")
-                                .font(.appTitle)
-                            Text("Interactive revenue telemetry charts will be configured in Phase 12.")
-                                .font(.appSubheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding()
+                        BillingAnalyticsView()
 
                     case .profile:
                         ProfileTabView(authVM: authVM)
@@ -196,12 +186,30 @@ struct ClerkSplitView: View {
         .listStyle(.plain)
     }
 
-    private var telemetryPlaceholderList: some View {
+    private var telemetryContentList: some View {
         List {
-            Text("Monthly Facility Revenue")
-            Text("Parts Margin vs Wholesale Cost")
-            Text("Labor Hours Utilization")
+            Section(header: Text("Telemetry Streams")) {
+                HStack {
+                    Image(systemName: "chart.bar.fill")
+                        .foregroundColor(Color.brandNavy)
+                    Text("Facility Revenue Telemetry")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                HStack {
+                    Image(systemName: "chart.pie.fill")
+                        .foregroundColor(Color.statusAmber)
+                    Text("Parts Category Markup")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                HStack {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .foregroundColor(Color.statusGreen)
+                    Text("Technician Labor Hours")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+            }
         }
+        .listStyle(.insetGrouped)
     }
 
 
