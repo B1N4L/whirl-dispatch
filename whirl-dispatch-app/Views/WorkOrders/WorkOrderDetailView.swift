@@ -247,6 +247,8 @@ struct WorkOrderDetailView: View {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
                                 .stroke(Color.surfaceBorder, lineWidth: 1)
                         )
+                        .accessibilityLabel("Diagnostic Machinery Dossier & Checklist")
+                        .accessibilityHint("Double tap to inspect HVAC baseline metrics and capture damage photos.")
                     }
                 }
                 .padding(.horizontal, 16)
@@ -295,6 +297,9 @@ struct WorkOrderDetailView: View {
                             ))
                             .labelsHidden()
                             .tint(Color.statusAmber)
+                            .accessibilityLabel("Shielded Plant Room Mode")
+                            .accessibilityValue(offlineManager.isPlantRoomOffline ? "Enabled" : "Disabled")
+                            .accessibilityHint("Requires active on-site status. Toggles subterranean Core Data caching.")
                         }
 
                         if order.status != .onSiteActive && !offlineManager.isPlantRoomOffline {
@@ -570,6 +575,8 @@ struct WorkOrderDetailView: View {
                 .stroke(Color.surfaceBorder, lineWidth: 1)
         )
         .padding(.horizontal, 16)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("iOS Calendar Integration: \(calendarSyncService.isOrderSynced(order.id) ? "Scheduled" : "Not Scheduled")")
     }
 
 

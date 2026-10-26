@@ -129,6 +129,9 @@ struct WorkOrderCardView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(order.isEmergency ? Color.statusRed.opacity(0.3) : Color.surfaceBorder.opacity(0.6), lineWidth: 1)
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(order.workOrderNumber): \(order.title). Priority: \(order.priority.rawValue). Status: \(order.status.rawValue). Facility: \(order.facility?.displayName ?? "Unknown facility")")
+        .accessibilityHint("Double tap to open work order details")
     }
 
 

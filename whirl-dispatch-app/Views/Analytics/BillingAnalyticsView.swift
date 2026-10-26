@@ -220,6 +220,9 @@ struct BillingAnalyticsView: View {
             }
             .frame(height: 200)
             .padding(.top, 4)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Commercial Facility Revenue Telemetry Bar Chart")
+            .accessibilityHint("Displays revenue across commercial facilities. Average benchmark is $\(Int(averageRevenue)).")
 
             // legend
             HStack(spacing: 16) {
@@ -289,6 +292,9 @@ struct BillingAnalyticsView: View {
                 }
                 .chartLegend(.hidden)
                 .frame(height: 190)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Parts Expense Allocation Donut Chart")
+                .accessibilityHint("Total parts spend $\(Int(totalPartsSpend)).")
 
                 // centered donut metric summary
                 VStack(spacing: 2) {
@@ -442,6 +448,9 @@ struct BillingAnalyticsView: View {
             }
             .frame(height: 190)
             .padding(.top, 4)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Technician Labor Hours Trend Line Chart")
+            .accessibilityHint("Shows weekly billable labor hours trend against the 40-hour target.")
 
             HStack {
                 Circle()

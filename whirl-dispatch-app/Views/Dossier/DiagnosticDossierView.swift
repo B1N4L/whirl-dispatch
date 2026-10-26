@@ -227,6 +227,7 @@ struct DiagnosticDossierView: View {
                 .padding(4)
                 .background(Color(uiColor: .tertiarySystemGroupedBackground))
                 .cornerRadius(6)
+                .accessibilityLabel("Pre-service \(label)")
 
             TextField("0.0", text: after)
                 .keyboardType(.decimalPad)
@@ -237,6 +238,7 @@ struct DiagnosticDossierView: View {
                 .padding(4)
                 .background(Color(uiColor: .tertiarySystemGroupedBackground))
                 .cornerRadius(6)
+                .accessibilityLabel("Post-service \(label)")
         }
     }
 
@@ -285,6 +287,8 @@ struct DiagnosticDossierView: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Pre-Service Baseline Proof Photo")
+                        .accessibilityHint("Double tap to inspect full-screen with GPS watermark")
                     } else {
                         RoundedRectangle(cornerRadius: 8)
                             .fill(Color(uiColor: .tertiarySystemGroupedBackground))
@@ -334,6 +338,8 @@ struct DiagnosticDossierView: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Post-Service Restored Proof Photo")
+                        .accessibilityHint("Double tap to inspect full-screen with GPS watermark")
                     } else {
                         RoundedRectangle(cornerRadius: 8)
                             .fill(Color(uiColor: .tertiarySystemGroupedBackground))
@@ -436,6 +442,10 @@ struct DiagnosticDossierView: View {
         }
         .buttonStyle(.plain)
         .padding(.vertical, 3)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.itemLabel)")
+        .accessibilityValue(item.isChecked ? "Completed" : "Incomplete")
+        .accessibilityAddTraits(item.isChecked ? [.isButton, .isSelected] : .isButton)
     }
 
 
