@@ -1,0 +1,181 @@
+//
+//  ServiceTests.swift
+//  whirl-dispatch-appTests
+//
+//  Created by Binal on 2026-10-26.
+//
+
+import Testing
+import Foundation
+import CoreLocation
+@testable import whirl_dispatch_app
+
+@MainActor
+struct ServiceTests {
+
+    // MARK: - Geofencing & Anti-Ghost Clocking Tests
+
+    @Test func testGeofenceZeroDistanceForIdenticalCoordinates() throws {
+        let geofence = GeofenceService.shared
+        let point = CLLocationCoordinate2D(latitude: 6.9271, longitude: 79.8612)
+
+        let distance = geofence.calculateDistance(from: point, to: point)
+        #expect(distance < 0.001)
+    }
+
+
+    @Test func testGeofenceInsidePerimeterEvaluation() throws {
+        let geofence = GeofenceService.shared
+        let facilityCenter = CLLocationCoordinate2D(latitude: 6.9344, longitude: 79.8428)
+
+        // offset by approximately 50 meters north
+        let technicianLocation = CLLocationCoordinate2D(latitude: 6.93485, longitude: 79.8428)
+
+        let evaluation = geofence.evaluate(
+            userCoordinate: technicianLocation,
+            facilityCoordinate: facilityCenter,
+            radiusMeters: 150.0
+        )
+
+        #expect(evaluation.isInside == true)
+        #expect(evaluation.distanceMeters < 150.0)
+        #expect(evaluation.formattedDistance.hasSuffix("m"))
+    }
+
+
+    @Test func testGeofenceOutsidePerimeterAntiGhostEnforcement() throws {
+        let geofence = GeofenceService.shared
+        let facilityCenter = CLLocationCoordinate2D(latitude: 6.9344, longitude: 79.8428)
+
+        // technician is 2.5 km away in Kollupitiya
+        let remoteLocation = CLLocationCoordinate2D(latitude: 6.9120, longitude: 79.8507)
+
+        let evaluation = geofence.evaluate(
+            userCoordinate: remoteLocation,
+            facilityCoordinate: facilityCenter,
+            radiusMeters: 150.0
+        )
+
+        #expect(evaluation.isInside == false)
+        #expect(evaluation.distanceMeters > 150.0)
+        #expect(evaluation.formattedDistance.contains("km"))
+    }
+
+
+    // MARK: - Billing Cost Engine Calculations
+
+    @Test func testBillingCostEstimationMathematicalFormulas() throws {
+        let billingVM = BillingViewModel()
+        billingVM.laborHours = 4.0
+        billingVM.hourlyRate = 80.0
+        billingVM.partsSubtotal = 200.0
+        billingVM.partsMarkupPercent = 20.0
+        billingVM.equipmentFee = 50.0
+        billingVM.taxPercent = 10.0
+
+        // labor = 4 * 80 = 320
+        #expect(billingVM.laborSubtotal == 320.0)
+        #expect(billingVM.formattedLaborSubtotal.contains("320.00"))
+
+        // parts markup = 200 * 0.20 = 40; parts with markup = 240
+        #expect(billingVM.partsMarkupAmount == 40.0)
+        #expect(billingVM.partsWithMarkup == 240.0)
+
+        // subtotal = 320 + 240 + 50 = 610
+        #expect(billingVM.subtotalBeforeTax == 610.0)
+
+        // tax = 610 * 0.10 = 61
+        #expect(billingVM.calculatedTaxAmount == 61.0)
+
+        // grand total = 610 + 61 = 671
+        #expect(billingVM.grandTotal == 671.0)
+        #expect(billingVM.formattedGrandTotal.contains("671.00"))
+    }
+
+
+    @Test func testBillingDynamicMarkupSliderAdjustment() throws {
+        let billingVM = BillingViewModel()
+        billingVM.laborHours = 5.0
+        billingVM.hourlyRate = 100.0
+        billingVM.partsSubtotal = 300.0
+        billingVM.partsMarkupPercent = 15.0
+        billingVM.equipmentFee = 0.0
+        billingVM.taxPercent = 0.0
+
+        #expect(billingVM.partsWithMarkup == 345.0)
+        #expect(billingVM.grandTotal == 845.0)
+
+        // clerk increases parts markup to 30%
+        billingVM.partsMarkupPercent = 30.0
+        #expect(billingVM.partsMarkupAmount == 90.0)
+        #expect(billingVM.partsWithMarkup == 390.0)
+        #expect(billingVM.grandTotal == 890.0)
+    }
+
+
+    // MARK: - Keychain Security Storage
+
+    @Test func testKeychainTokenSaveReadAndClearLifecycle() throws {
+        let keychain = KeychainManager.shared
+        let testToken = "test_jwt_bearer_token_whirldispatch_8849"
+
+        keychain.saveToken(testToken)
+        let retrieved = keychain.getToken()
+        #expect(retrieved == testToken)
+
+        keychain.clearToken()
+        let cleared = keychain.getToken()
+        #expect(cleared == nil)
+    }
+
+
+    // MARK: - Plant Room Offline Mode Rules
+
+    @Test func testPlantRoomOfflineModeSiteValidation() throws {
+        let offline = OfflineModeManager.shared
+        offline.isPlantRoomOffline = false
+
+        let dispatchedOrder = WorkOrder(
+            id: "wo-offline-test",
+            workOrderNumber: "WO-OFF-01",
+            clientFacilityId: "fac-1",
+            supervisorId: "sup-1",
+            leadTechnicianId: "tech-1",
+            assignedFleetAssetId: nil,
+            title: "Plant Room Test",
+            description: "Testing offline restriction",
+            priority: .high,
+            status: .dispatched,
+            scheduledStartTime: "2026-10-26T10:00:00Z",
+            scheduledEndTime: "2026-10-26T12:00:00Z",
+            actualStartTime: nil,
+            actualEndTime: nil,
+            facility: nil
+        )
+
+        // attempting to toggle when dispatched (not on-site active)
+        let blockedResult = offline.setPlantRoomOffline(enabled: true, for: dispatchedOrder)
+        #expect(blockedResult == false)
+        #expect(offline.isPlantRoomOffline == false)
+        #expect(offline.restrictionErrorMessage != nil)
+
+        // attempting with nil work order
+        let nilResult = offline.setPlantRoomOffline(enabled: true, for: nil)
+        #expect(nilResult == false)
+        #expect(offline.isPlantRoomOffline == false)
+
+        var onSiteOrder = dispatchedOrder
+        onSiteOrder.status = .onSiteActive
+
+        // attempting after arriving and clocking in on-site
+        let activeResult = offline.setPlantRoomOffline(enabled: true, for: onSiteOrder)
+        #expect(activeResult == true)
+        #expect(offline.isPlantRoomOffline == true)
+        #expect(offline.restrictionErrorMessage == nil)
+
+        // switching back online
+        let onlineResult = offline.setPlantRoomOffline(enabled: false, for: onSiteOrder)
+        #expect(onlineResult == true)
+        #expect(offline.isPlantRoomOffline == false)
+    }
+}
