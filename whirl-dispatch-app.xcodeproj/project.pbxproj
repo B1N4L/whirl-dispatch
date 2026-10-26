@@ -371,6 +371,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "WhirlDispatch syncs dispatched commercial HVAC work orders and maintenance windows to your native calendar.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "WhirlDispatch requires calendar access to schedule HVAC service dispatches.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "WhirlDispatch syncs dispatched commercial HVAC work orders to your native calendar.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "WhirlDispatch requires camera access to capture HVAC equipment diagnostic and damage proof photos.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "WhirlDispatch requires location to verify commercial facility arrival and prevent anti-ghost clocking.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "WhirlDispatch requires photo library access to upload HVAC service inspection photos.";
@@ -405,6 +408,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "WhirlDispatch syncs dispatched commercial HVAC work orders and maintenance windows to your native calendar.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "WhirlDispatch requires calendar access to schedule HVAC service dispatches.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "WhirlDispatch syncs dispatched commercial HVAC work orders to your native calendar.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "WhirlDispatch requires camera access to capture HVAC equipment diagnostic and damage proof photos.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "WhirlDispatch requires location to verify commercial facility arrival and prevent anti-ghost clocking.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "WhirlDispatch requires photo library access to upload HVAC service inspection photos.";

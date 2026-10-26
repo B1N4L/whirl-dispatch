@@ -18,11 +18,32 @@ struct WorkOrderDetailView: View {
     @State private var showingDossierSheet = false
     @State private var actionErrorMessage: String? = nil
     @State private var offlineManager = OfflineModeManager.shared
+    @State private var calendarSyncService = CalendarSyncService.shared
+    @State private var calendarSyncToast: String? = nil
 
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+
+                if let toast = calendarSyncToast {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(Color.statusGreen)
+                        Text(toast)
+                            .font(.appCaption)
+                        Spacer()
+                        Button(action: { calendarSyncToast = nil }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.statusGreen.opacity(0.12))
+                    .cornerRadius(8)
+                    .padding(.horizontal, 16)
+                }
 
                 // order status and priority header
                 HStack {
@@ -231,6 +252,10 @@ struct WorkOrderDetailView: View {
                 .padding(.horizontal, 16)
 
 
+                // native ios calendar sync card
+                calendarSyncCard
+
+
                 // option b: shielded plant room offline mode toggle
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Plant Room Connectivity")
@@ -402,6 +427,81 @@ struct WorkOrderDetailView: View {
             }
             isPerformingTransition = false
         }
+    }
+
+
+    private var calendarSyncCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("iOS Calendar Integration", systemImage: "calendar.badge.clock")
+                    .font(.appSubheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                if calendarSyncService.isOrderSynced(order.id) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(Color.statusGreen)
+                        Text("Synced")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(Color.statusGreen)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.statusGreen.opacity(0.12))
+                    .cornerRadius(6)
+                }
+            }
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(calendarSyncService.isOrderSynced(order.id) ? "Scheduled in Native Calendar" : "Sync Dispatch to Calendar")
+                        .font(.appHeadline)
+                        .fontWeight(.semibold)
+                    Text("Automates maintenance window booking with site contact details.")
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Button(action: {
+                    Task {
+                        do {
+                            _ = try await calendarSyncService.syncWorkOrderToCalendar(order)
+                            let haptic = UINotificationFeedbackGenerator()
+                            haptic.notificationOccurred(.success)
+                            calendarSyncToast = "Work order synchronized to iOS Calendar."
+                        } catch {
+                            calendarSyncToast = "Calendar sync failed: \(error.localizedDescription)"
+                        }
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: calendarSyncService.isOrderSynced(order.id) ? "arrow.triangle.2.circlepath" : "calendar.badge.plus")
+                        Text(calendarSyncService.isOrderSynced(order.id) ? "Update" : "Add to Calendar")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.brandNavy)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.surfaceBorder, lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
     }
 
 
