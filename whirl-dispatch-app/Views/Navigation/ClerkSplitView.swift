@@ -13,6 +13,7 @@ struct ClerkSplitView: View {
     @State private var viewModel = BillingViewModel()
     @State private var selectedMenu: ClerkMenu? = .invoicingQueue
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var selectedProfileSection: ProfileSection = .personalContact
 
 
     enum ClerkMenu: String, CaseIterable, Identifiable {
@@ -75,7 +76,7 @@ struct ClerkSplitView: View {
                         telemetryContentList
 
                     case .profile:
-                        ProfileTabView(authVM: authVM)
+                        ProfileSectionMenuView(authVM: authVM, selectedSection: $selectedProfileSection)
                     }
                 } else {
                     Text("Select a billing category")
@@ -107,7 +108,7 @@ struct ClerkSplitView: View {
                         BillingAnalyticsView()
 
                     case .profile:
-                        ProfileTabView(authVM: authVM)
+                        ProfileDetailPane(section: selectedProfileSection, authVM: authVM)
                     }
                 } else {
                     Text("Select an invoice from the list")
@@ -126,37 +127,88 @@ struct ClerkSplitView: View {
     // MARK: - Column 2: Content Lists
 
     private var invoicingQueueContentList: some View {
-        List(viewModel.workOrders, selection: $viewModel.selectedWorkOrder) { order in
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(order.workOrderNumber)
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color.brandNavy)
+        VStack(spacing: 0) {
+            Picker("Filter Queue", selection: $viewModel.selectedFilter) {
+                ForEach(BillingFilter.allCases) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            if viewModel.filteredWorkOrders.isEmpty {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 38))
+                        .foregroundColor(Color.brandNavy.opacity(0.35))
+
+                    Text("No Completed Dispatches")
+                        .font(.appHeadline)
+                        .foregroundColor(.primary)
+
+                    Text("Dispatches currently in progress are hidden from billing until technicians finish on-site work and mark them completed.")
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+
+                    Button("Refresh Queue") {
+                        Task {
+                            await viewModel.loadBillingData()
+                        }
+                    }
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(Color.brandNavy)
+                    .padding(.top, 4)
 
                     Spacer()
-
-                    StatusBadge(status: order.status.toStatusType)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(viewModel.filteredWorkOrders, selection: $viewModel.selectedWorkOrder) { order in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .center) {
+                            Text(order.workOrderNumber)
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .foregroundColor(Color.brandNavy)
 
-                Text(order.title)
-                    .font(.appSubheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
+                            Spacer()
 
-                Text(order.facility?.facilityName ?? "Commercial Client")
-                    .font(.appCaption)
-                    .foregroundColor(.secondary)
+                            BillingStageBadge(isBilled: order.status == .billed)
+                        }
+
+                        Text(order.title)
+                            .font(.appSubheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+
+                        HStack {
+                            Text(order.facility?.facilityName ?? "Commercial Client")
+                                .font(.appCaption)
+                                .foregroundColor(.secondary)
+
+                            Spacer()
+
+                            StatusBadge(status: order.status.toStatusType)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .tag(order)
+                    .onTapGesture {
+                        viewModel.selectWorkOrder(order)
+                    }
+                }
+                .listStyle(.plain)
+                .refreshable {
+                    await viewModel.loadBillingData()
+                }
             }
-            .padding(.vertical, 4)
-            .tag(order)
-            .onTapGesture {
-                viewModel.selectWorkOrder(order)
-            }
-        }
-        .listStyle(.plain)
-        .refreshable {
-            await viewModel.loadBillingData()
         }
     }
 
@@ -218,12 +270,76 @@ struct ClerkSplitView: View {
     private func billingEstimationDetailPane(_ order: WorkOrder) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                // Top Toast Alert (if active)
+                if let toast = viewModel.successToast {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(Color.statusGreen)
+                        Text(toast)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color.statusGreen)
+                        Spacer()
+                        Button(action: { viewModel.successToast = nil }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.statusGreen.opacity(0.12))
+                    .cornerRadius(8)
+                }
+
+                // Top Error Alert (if active)
+                if let err = viewModel.errorMessage {
+                    HStack(spacing: 8) {
+                        Image(systemName: "xmark.octagon.fill")
+                            .foregroundColor(Color.statusRed)
+                        Text(err)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color.statusRed)
+                        Spacer()
+                        Button(action: { viewModel.errorMessage = nil }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.statusRed.opacity(0.12))
+                    .cornerRadius(8)
+                }
+
+                // In-Progress Dispatch Restriction Banner
+                if !viewModel.canBillSelectedOrder {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(Color.statusAmber)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Dispatch In Progress (\(order.status.label))")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(Color.statusAmber)
+                            Text("Invoicing and client issuance are restricted until technicians mark this dispatch as Completed.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(12)
+                    .background(Color.statusAmber.opacity(0.12))
+                    .cornerRadius(8)
+                }
+
                 // top header card
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(viewModel.currentInvoiceNumber)
-                            .font(.system(size: 24, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color.brandNavy)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Text(viewModel.currentInvoiceNumber)
+                                .font(.system(size: 24, weight: .bold, design: .monospaced))
+                                .foregroundColor(Color.brandNavy)
+
+                            BillingStageBadge(isBilled: order.status == .billed)
+                        }
 
                         Text(order.title)
                             .font(.appHeadline)
@@ -235,81 +351,144 @@ struct ClerkSplitView: View {
 
                     Spacer()
 
-                    Text(viewModel.invoiceStatus.label)
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(Color.statusGreen)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color.statusGreen.opacity(0.14))
-                        .clipShape(Capsule())
+                    VStack(alignment: .trailing, spacing: 6) {
+                        Text(viewModel.invoiceStatus.label)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(Color.statusGreen)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Color.statusGreen.opacity(0.14))
+                            .clipShape(Capsule())
+
+                        if viewModel.isLoading {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        }
+                    }
                 }
                 .padding(16)
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .cornerRadius(12)
 
-                // 1. labor hours calculation card with rate controls
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Label("Billable Labor Hours", systemImage: "clock.badge.checkmark.fill")
+                // 1. Audited Field Labor (Option B - Fixed Role-Based Rates)
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .center) {
+                        Label("Audited Field Labor", systemImage: "lock.shield.fill")
                             .font(.appHeadline)
                             .foregroundColor(Color.brandNavy)
 
                         Spacer()
 
                         Text(viewModel.formattedLaborSubtotal)
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundColor(Color.brandNavy)
                     }
 
-                    Divider()
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Verified Shift Hours")
-                                .font(.appCaption)
-                                .foregroundColor(.secondary)
-                            Text(String(format: "%.1f hours", viewModel.laborHours))
-                                .font(.system(size: 14, weight: .semibold))
-                        }
+                    // System audit badge
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color.statusGreen)
+                        Text("Geofence Verified • Fixed Role Rates Locked")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color.statusGreen)
 
                         Spacer()
 
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("Hourly Contract Rate")
-                                .font(.appCaption)
-                                .foregroundColor(.secondary)
-                            Text(String(format: "$%.2f / hr", viewModel.hourlyRate))
-                                .font(.system(size: 14, weight: .semibold))
-                        }
+                        Text("SOX Compliant")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(.secondary)
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.statusGreen.opacity(0.08))
+                    .cornerRadius(6)
 
-                    // interactive labor rate and hours controls
-                    VStack(spacing: 8) {
-                        Stepper(value: $viewModel.hourlyRate, in: 65.0...150.0, step: 5.0) {
-                            HStack {
-                                Text("Labor Rate:")
+                    Text("Labor hours are calculated strictly from verified on-site geofence shifts and bound to fixed technician role rates. Billing clerks cannot modify labor hours or rates.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+
+                    Divider()
+
+                    // Itemized technician role breakdown
+                    if !viewModel.laborBreakdown.isEmpty {
+                        VStack(spacing: 8) {
+                            ForEach(viewModel.laborBreakdown) { item in
+                                HStack(alignment: .center) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text(item.technicianName)
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(.primary)
+
+                                            Text(item.roleLabel)
+                                                .font(.system(size: 9, weight: .bold))
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(
+                                                    item.role == "LEAD_TECHNICIAN"
+                                                        ? Color.brandNavy.opacity(0.12)
+                                                        : Color.secondary.opacity(0.15)
+                                                )
+                                                .foregroundColor(
+                                                    item.role == "LEAD_TECHNICIAN"
+                                                        ? Color.brandNavy
+                                                        : Color.primary
+                                                )
+                                                .cornerRadius(4)
+                                        }
+
+                                        Text("\(item.formattedHours) verified @ \(item.formattedHourlyRate)")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                    Text(item.formattedSubtotal)
+                                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                        .foregroundColor(Color.brandNavy)
+                                }
+                                .padding(10)
+                                .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                                .cornerRadius(8)
+                            }
+                        }
+                    } else {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Verified Shift Hours")
+                                    .font(.appCaption)
+                                    .foregroundColor(.secondary)
+                                Text(String(format: "%.1f hours", viewModel.laborHours))
+                                    .font(.system(size: 14, weight: .semibold))
+                            }
+
+                            Spacer()
+
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Applied Role Rate")
                                     .font(.appCaption)
                                     .foregroundColor(.secondary)
                                 Text(String(format: "$%.2f / hr", viewModel.hourlyRate))
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(Color.brandNavy)
+                                    .font(.system(size: 14, weight: .semibold))
                             }
                         }
-
-                        Stepper(value: $viewModel.laborHours, in: 0.5...40.0, step: 0.5) {
-                            HStack {
-                                Text("Labor Hours:")
-                                    .font(.appCaption)
-                                    .foregroundColor(.secondary)
-                                Text(String(format: "%.1f hrs", viewModel.laborHours))
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(Color.brandNavy)
-                            }
-                        }
+                        .padding(10)
+                        .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                        .cornerRadius(8)
                     }
-                    .padding(10)
-                    .background(Color(uiColor: .tertiarySystemGroupedBackground))
-                    .cornerRadius(8)
+
+                    // Total verified labor hours indicator
+                    HStack {
+                        Text("Total Audited On-Site Duration")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(String(format: "%.1f hrs", viewModel.laborHours))
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .foregroundColor(.primary)
+                    }
                 }
                 .padding(16)
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -440,11 +619,25 @@ struct ClerkSplitView: View {
                         Divider()
 
                         HStack {
-                            Text("1. Certified HVAC Labor")
-                                .font(.system(size: 12))
+                            Text("1. Certified Field Labor")
+                                .font(.system(size: 12, weight: .semibold))
                             Spacer()
                             Text(viewModel.formattedLaborSubtotal)
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        }
+
+                        if !viewModel.laborBreakdown.isEmpty {
+                            ForEach(viewModel.laborBreakdown) { item in
+                                HStack {
+                                    Text("   • \(item.technicianName) (\(item.roleLabel))")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Text("\(item.formattedHours) @ \(item.formattedHourlyRate)")
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
                         }
 
                         HStack {
@@ -490,38 +683,73 @@ struct ClerkSplitView: View {
                             .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                     )
 
-                    // action buttons: share export & issue to client
-                    HStack(spacing: 12) {
-                        ShareLink(item: viewModel.invoiceExportText) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "square.and.arrow.up")
-                                Text("Share Export")
-                                    .fontWeight(.semibold)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Color(uiColor: .tertiarySystemGroupedBackground))
-                            .foregroundColor(Color.brandNavy)
-                            .cornerRadius(8)
-                        }
-
+                    // action buttons: compile official invoice, share export & issue to client
+                    VStack(spacing: 8) {
                         Button(action: {
                             let generator = UINotificationFeedbackGenerator()
                             generator.notificationOccurred(.success)
                             Task {
-                                await viewModel.issueInvoiceToClient()
+                                _ = await viewModel.generateBackendEstimate()
                             }
                         }) {
                             HStack(spacing: 6) {
-                                Image(systemName: "checkmark.circle.fill")
-                                Text("Issue to Client")
-                                    .fontWeight(.bold)
+                                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                                Text("Re-Calculate & Compile Draft")
+                                    .fontWeight(.semibold)
                             }
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Color.brandNavy)
-                            .foregroundColor(.white)
+                            .padding(.vertical, 11)
+                            .background(
+                                viewModel.canBillSelectedOrder
+                                    ? Color(uiColor: .tertiarySystemGroupedBackground)
+                                    : Color(uiColor: .tertiarySystemGroupedBackground).opacity(0.5)
+                            )
+                            .foregroundColor(
+                                viewModel.canBillSelectedOrder
+                                    ? Color.brandNavy
+                                    : Color.secondary
+                            )
                             .cornerRadius(8)
+                        }
+                        .disabled(!viewModel.canBillSelectedOrder)
+
+                        HStack(spacing: 12) {
+                            ShareLink(item: viewModel.invoiceExportText) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "square.and.arrow.up")
+                                    Text("Share Export")
+                                        .fontWeight(.semibold)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                                .foregroundColor(Color.brandNavy)
+                                .cornerRadius(8)
+                            }
+
+                            Button(action: {
+                                let generator = UINotificationFeedbackGenerator()
+                                generator.notificationOccurred(.success)
+                                Task {
+                                    await viewModel.issueInvoiceToClient()
+                                }
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                    Text("Issue to Client")
+                                        .fontWeight(.bold)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(
+                                    viewModel.canBillSelectedOrder
+                                        ? Color.brandNavy
+                                        : Color.gray.opacity(0.5)
+                                )
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                            }
+                            .disabled(!viewModel.canBillSelectedOrder)
                         }
                     }
                 }
@@ -580,18 +808,24 @@ struct ClerkCompactView: View {
         TabView(selection: $selectedTab) {
             NavigationStack {
                 List(viewModel.workOrders) { order in
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 5) {
                         HStack {
                             Text(order.workOrderNumber)
                                 .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .foregroundColor(Color.brandNavy)
                             Spacer()
-                            StatusBadge(status: order.status.toStatusType)
+                            BillingStageBadge(isBilled: order.status == .billed)
                         }
                         Text(order.title)
                             .font(.appHeadline)
-                        Text(order.facility?.facilityName ?? "Facility")
-                            .font(.appCaption)
-                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                        HStack {
+                            Text(order.facility?.facilityName ?? "Facility")
+                                .font(.appCaption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            StatusBadge(status: order.status.toStatusType)
+                        }
                     }
                     .padding(.vertical, 4)
                 }
@@ -655,5 +889,30 @@ struct ClerkCompactView: View {
         .task {
             await viewModel.loadBillingData()
         }
+    }
+}
+
+struct BillingStageBadge: View {
+    let isBilled: Bool
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: isBilled ? "checkmark.seal.fill" : "clock.badge.checkmark.fill")
+                .font(.system(size: 8, weight: .bold))
+            Text(isBilled ? "Already Billed" : "About to be Billed")
+                .font(.system(size: 10, weight: .bold))
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .foregroundColor(isBilled ? Color.statusGreen : Color.statusAmber)
+        .background(
+            Capsule()
+                .fill(isBilled ? Color.statusGreen.opacity(0.12) : Color.statusAmber.opacity(0.14))
+        )
+        .overlay(
+            Capsule()
+                .stroke(isBilled ? Color.statusGreen.opacity(0.28) : Color.statusAmber.opacity(0.28), lineWidth: 0.8)
+        )
+        .accessibilityLabel(isBilled ? "Billing Status: Already Billed" : "Billing Status: About to be Billed")
     }
 }

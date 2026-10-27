@@ -178,4 +178,42 @@ struct ServiceTests {
         #expect(onlineResult == true)
         #expect(offline.isPlantRoomOffline == false)
     }
+
+
+    // MARK: - Location Simulation & Departure Tests
+
+    @Test func testLocationManagerSimulationCycle() throws {
+        let locationManager = LocationManager.shared
+        let facilityCoord = CLLocationCoordinate2D(latitude: 6.9344, longitude: 79.8428)
+
+        // 1. Simulate arrival inside facility
+        locationManager.simulateArrival(at: facilityCoord)
+        #expect(locationManager.isSimulatedLocationActive == true)
+        #expect(locationManager.effectiveCoordinate.latitude == facilityCoord.latitude)
+        #expect(locationManager.effectiveCoordinate.longitude == facilityCoord.longitude)
+
+        let evalInside = GeofenceService.shared.evaluate(
+            userCoordinate: locationManager.effectiveCoordinate,
+            facilityCoordinate: facilityCoord,
+            radiusMeters: 150.0
+        )
+        #expect(evalInside.isInside == true)
+        #expect(evalInside.distanceMeters < 1.0)
+
+        // 2. Simulate departure outside facility geofence (~660m away)
+        locationManager.simulateDeparture(from: facilityCoord)
+        #expect(locationManager.isSimulatedLocationActive == true)
+
+        let evalOutside = GeofenceService.shared.evaluate(
+            userCoordinate: locationManager.effectiveCoordinate,
+            facilityCoordinate: facilityCoord,
+            radiusMeters: 150.0
+        )
+        #expect(evalOutside.isInside == false)
+        #expect(evalOutside.distanceMeters > 500.0)
+
+        // 3. Reset simulation back to physical GPS
+        locationManager.resetSimulation()
+        #expect(locationManager.isSimulatedLocationActive == false)
+    }
 }

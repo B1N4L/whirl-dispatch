@@ -69,7 +69,57 @@ struct BillingInvoice: Identifiable, Codable, Equatable {
 }
 
 
+struct LaborBreakdownItem: Identifiable, Codable, Equatable {
+    var id: String { technicianId }
+    let technicianId: String
+    let technicianName: String
+    let role: String
+    let hourlyRate: Double
+    let billableHours: Double
+    let subtotal: Double
+
+    var formattedHourlyRate: String {
+        String(format: "$%.2f/hr", hourlyRate)
+    }
+
+    var formattedHours: String {
+        String(format: "%.1f hrs", billableHours)
+    }
+
+    var formattedSubtotal: String {
+        String(format: "$%.2f", subtotal)
+    }
+
+    var roleLabel: String {
+        role == "LEAD_TECHNICIAN" ? "Lead Technician" : "Field Technician"
+    }
+}
+
+struct BillingCalculationResult: Codable, Equatable {
+    let workOrderId: String
+    let clientFacilityId: String
+    let totalBillableLaborHours: Double
+    let hourlyLaborRateApplied: Double
+    let subtotalLabor: Double
+    let laborBreakdown: [LaborBreakdownItem]?
+    let subtotalApprovedParts: Double
+    let partsMarkupPercentApplied: Double
+    let subtotalPartsWithMarkup: Double
+    let fleetEquipmentFee: Double
+    let taxPercent: Double
+    let taxAmount: Double
+    let grandTotal: Double
+    let invoiceNumber: String
+    let dueDate: String?
+}
+
 struct EstimateResponse: Codable {
     let message: String?
-    let invoice: BillingInvoice
+    let invoice: BillingInvoice?
+    let calculation: BillingCalculationResult?
+}
+
+struct EstimatePreviewResponse: Codable {
+    let calculation: BillingCalculationResult
+    let existingInvoice: BillingInvoice?
 }
