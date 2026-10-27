@@ -57,6 +57,11 @@ struct ClockOutResponse: Codable {
     let session: AttendanceRecord
 }
 
+struct CurrentAttendanceResponse: Codable {
+    let active: Bool
+    let session: AttendanceRecord?
+}
+
 struct AttendanceTimelineResponse: Codable {
     let workOrderId: String?
     let count: Int?

@@ -140,17 +140,45 @@ final class OfflineStorageService: @unchecked Sendable {
     }
 
 
-    // fetch cached attendance record by work order id
+    // fetch cached attendance record by work order id, prioritizing active unclosed sessions
     func fetchCachedAttendance(workOrderId: String) async -> AttendanceRecord? {
         let context = createBackgroundContext()
 
         return await context.perform {
-            let fetchRequest: NSFetchRequest<CachedAttendance> = NSFetchRequest(entityName: "CachedAttendance")
-            fetchRequest.predicate = NSPredicate(format: "workOrderId == %@", workOrderId)
-            fetchRequest.fetchLimit = 1
+            // 1. check for active unclosed shift first
+            let activeReq: NSFetchRequest<CachedAttendance> = NSFetchRequest(entityName: "CachedAttendance")
+            activeReq.predicate = NSPredicate(format: "workOrderId == %@ AND clockOutTimestamp == nil", workOrderId)
+            activeReq.fetchLimit = 1
 
-            if let cached = try? context.fetch(fetchRequest).first {
-                return cached.toDomain()
+            if let active = try? context.fetch(activeReq).first {
+                return active.toDomain()
+            }
+
+            // 2. fallback to latest historical session
+            let fallbackReq: NSFetchRequest<CachedAttendance> = NSFetchRequest(entityName: "CachedAttendance")
+            fallbackReq.predicate = NSPredicate(format: "workOrderId == %@", workOrderId)
+            fallbackReq.sortDescriptors = [NSSortDescriptor(key: "clockInTimestamp", ascending: false)]
+            fallbackReq.fetchLimit = 1
+
+            if let latest = try? context.fetch(fallbackReq).first {
+                return latest.toDomain()
+            }
+            return nil
+        }
+    }
+
+    // fetch any currently active unclosed attendance session across all work orders
+    func fetchActiveCachedAttendance() async -> AttendanceRecord? {
+        let context = createBackgroundContext()
+
+        return await context.perform {
+            let activeReq: NSFetchRequest<CachedAttendance> = NSFetchRequest(entityName: "CachedAttendance")
+            activeReq.predicate = NSPredicate(format: "clockOutTimestamp == nil")
+            activeReq.sortDescriptors = [NSSortDescriptor(key: "clockInTimestamp", ascending: false)]
+            activeReq.fetchLimit = 1
+
+            if let active = try? context.fetch(activeReq).first {
+                return active.toDomain()
             }
             return nil
         }

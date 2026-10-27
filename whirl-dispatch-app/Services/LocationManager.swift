@@ -71,6 +71,16 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, @unchecked Sen
         self.isSimulatedLocationActive = true
     }
 
+    // simulate departure outside facility geofence (~660m away)
+    func simulateDeparture(from coordinate: CLLocationCoordinate2D) {
+        let outsideCoordinate = CLLocationCoordinate2D(
+            latitude: coordinate.latitude + 0.006,
+            longitude: coordinate.longitude + 0.006
+        )
+        self.simulatedCoordinate = outsideCoordinate
+        self.isSimulatedLocationActive = true
+    }
+
     // reset simulation back to physical GPS
     func resetSimulation() {
         self.simulatedCoordinate = nil

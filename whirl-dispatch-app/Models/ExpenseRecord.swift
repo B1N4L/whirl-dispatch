@@ -67,6 +67,66 @@ struct ExpenseItem: Identifiable, Codable, Equatable, Hashable {
     let quantity: Int
     let unitPrice: String
     let totalPrice: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, expenseClaimId, partDescription, quantity, unitPrice, totalPrice
+    }
+
+    init(
+        id: String,
+        expenseClaimId: String? = nil,
+        partDescription: String,
+        quantity: Int,
+        unitPrice: String,
+        totalPrice: String
+    ) {
+        self.id = id
+        self.expenseClaimId = expenseClaimId
+        self.partDescription = partDescription
+        self.quantity = quantity
+        self.unitPrice = unitPrice
+        self.totalPrice = totalPrice
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        expenseClaimId = try container.decodeIfPresent(String.self, forKey: .expenseClaimId)
+        partDescription = try container.decode(String.self, forKey: .partDescription)
+        quantity = try container.decode(Int.self, forKey: .quantity)
+
+        // Resiliently decode unitPrice whether backend sends numeric double/int or formatted string
+        if let str = try? container.decode(String.self, forKey: .unitPrice) {
+            unitPrice = str
+        } else if let num = try? container.decode(Double.self, forKey: .unitPrice) {
+            unitPrice = String(format: "%.2f", num)
+        } else if let intVal = try? container.decode(Int.self, forKey: .unitPrice) {
+            unitPrice = "\(intVal).00"
+        } else {
+            unitPrice = "0.00"
+        }
+
+        // Resiliently decode totalPrice whether backend sends numeric double/int or formatted string
+        if let str = try? container.decode(String.self, forKey: .totalPrice) {
+            totalPrice = str
+        } else if let num = try? container.decode(Double.self, forKey: .totalPrice) {
+            totalPrice = String(format: "%.2f", num)
+        } else if let intVal = try? container.decode(Int.self, forKey: .totalPrice) {
+            totalPrice = "\(intVal).00"
+        } else {
+            totalPrice = "0.00"
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(expenseClaimId, forKey: .expenseClaimId)
+        try container.encode(partDescription, forKey: .partDescription)
+        try container.encode(quantity, forKey: .quantity)
+        try container.encode(unitPrice, forKey: .unitPrice)
+        try container.encode(totalPrice, forKey: .totalPrice)
+    }
 }
 
 
@@ -89,6 +149,103 @@ struct ExpenseClaim: Identifiable, Codable, Equatable, Hashable {
     var rejectionReason: String?
     var items: [ExpenseItem]?
 
+    enum CodingKeys: String, CodingKey {
+        case id, workOrderId, leadTechnicianId, vendorName, receiptNumber
+        case totalAmount, currency, receiptImageUrl, receiptStoreLatitude
+        case receiptStoreLongitude, receiptCapturedAt, isThresholdExceeded
+        case approvalStatus, reviewedBySupervisorId, reviewedAt, rejectionReason, items
+    }
+
+    init(
+        id: String,
+        workOrderId: String,
+        leadTechnicianId: String,
+        vendorName: String,
+        receiptNumber: String? = nil,
+        totalAmount: String,
+        currency: String? = "USD",
+        receiptImageUrl: String? = nil,
+        receiptStoreLatitude: Double? = nil,
+        receiptStoreLongitude: Double? = nil,
+        receiptCapturedAt: String? = nil,
+        isThresholdExceeded: Bool? = nil,
+        approvalStatus: ExpenseApprovalStatus = .pending,
+        reviewedBySupervisorId: String? = nil,
+        reviewedAt: String? = nil,
+        rejectionReason: String? = nil,
+        items: [ExpenseItem]? = nil
+    ) {
+        self.id = id
+        self.workOrderId = workOrderId
+        self.leadTechnicianId = leadTechnicianId
+        self.vendorName = vendorName
+        self.receiptNumber = receiptNumber
+        self.totalAmount = totalAmount
+        self.currency = currency
+        self.receiptImageUrl = receiptImageUrl
+        self.receiptStoreLatitude = receiptStoreLatitude
+        self.receiptStoreLongitude = receiptStoreLongitude
+        self.receiptCapturedAt = receiptCapturedAt
+        self.isThresholdExceeded = isThresholdExceeded
+        self.approvalStatus = approvalStatus
+        self.reviewedBySupervisorId = reviewedBySupervisorId
+        self.reviewedAt = reviewedAt
+        self.rejectionReason = rejectionReason
+        self.items = items
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        workOrderId = try container.decode(String.self, forKey: .workOrderId)
+        leadTechnicianId = try container.decode(String.self, forKey: .leadTechnicianId)
+        vendorName = try container.decode(String.self, forKey: .vendorName)
+        receiptNumber = try container.decodeIfPresent(String.self, forKey: .receiptNumber)
+
+        // Resiliently decode totalAmount whether string or numeric
+        if let str = try? container.decode(String.self, forKey: .totalAmount) {
+            totalAmount = str
+        } else if let num = try? container.decode(Double.self, forKey: .totalAmount) {
+            totalAmount = String(format: "%.2f", num)
+        } else if let intVal = try? container.decode(Int.self, forKey: .totalAmount) {
+            totalAmount = "\(intVal).00"
+        } else {
+            totalAmount = "0.00"
+        }
+
+        currency = try container.decodeIfPresent(String.self, forKey: .currency)
+        receiptImageUrl = try container.decodeIfPresent(String.self, forKey: .receiptImageUrl)
+        receiptStoreLatitude = try container.decodeIfPresent(Double.self, forKey: .receiptStoreLatitude)
+        receiptStoreLongitude = try container.decodeIfPresent(Double.self, forKey: .receiptStoreLongitude)
+        receiptCapturedAt = try container.decodeIfPresent(String.self, forKey: .receiptCapturedAt)
+        isThresholdExceeded = try container.decodeIfPresent(Bool.self, forKey: .isThresholdExceeded)
+        approvalStatus = try container.decode(ExpenseApprovalStatus.self, forKey: .approvalStatus)
+        reviewedBySupervisorId = try container.decodeIfPresent(String.self, forKey: .reviewedBySupervisorId)
+        reviewedAt = try container.decodeIfPresent(String.self, forKey: .reviewedAt)
+        rejectionReason = try container.decodeIfPresent(String.self, forKey: .rejectionReason)
+        items = try container.decodeIfPresent([ExpenseItem].self, forKey: .items)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(workOrderId, forKey: .workOrderId)
+        try container.encode(leadTechnicianId, forKey: .leadTechnicianId)
+        try container.encode(vendorName, forKey: .vendorName)
+        try container.encodeIfPresent(receiptNumber, forKey: .receiptNumber)
+        try container.encode(totalAmount, forKey: .totalAmount)
+        try container.encodeIfPresent(currency, forKey: .currency)
+        try container.encodeIfPresent(receiptImageUrl, forKey: .receiptImageUrl)
+        try container.encodeIfPresent(receiptStoreLatitude, forKey: .receiptStoreLatitude)
+        try container.encodeIfPresent(receiptStoreLongitude, forKey: .receiptStoreLongitude)
+        try container.encodeIfPresent(receiptCapturedAt, forKey: .receiptCapturedAt)
+        try container.encodeIfPresent(isThresholdExceeded, forKey: .isThresholdExceeded)
+        try container.encode(approvalStatus, forKey: .approvalStatus)
+        try container.encodeIfPresent(reviewedBySupervisorId, forKey: .reviewedBySupervisorId)
+        try container.encodeIfPresent(reviewedAt, forKey: .reviewedAt)
+        try container.encodeIfPresent(rejectionReason, forKey: .rejectionReason)
+        try container.encodeIfPresent(items, forKey: .items)
+    }
 
     var supplierName: String {
         vendorName
@@ -116,7 +273,35 @@ struct CreateExpenseResponse: Codable {
 }
 
 struct ExpenseListResponse: Codable {
+    let count: Int?
     let expenses: [ExpenseClaim]
+
+    enum CodingKeys: String, CodingKey {
+        case count, expenses, claims
+    }
+
+    init(expenses: [ExpenseClaim], count: Int? = nil) {
+        self.expenses = expenses
+        self.count = count ?? expenses.count
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        count = try container.decodeIfPresent(Int.self, forKey: .count)
+        if let exp = try? container.decode([ExpenseClaim].self, forKey: .expenses) {
+            expenses = exp
+        } else if let clm = try? container.decode([ExpenseClaim].self, forKey: .claims) {
+            expenses = clm
+        } else {
+            expenses = []
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(count, forKey: .count)
+        try container.encode(expenses, forKey: .expenses)
+    }
 }
 
 struct ExpenseFinancialSummary: Codable, Equatable {

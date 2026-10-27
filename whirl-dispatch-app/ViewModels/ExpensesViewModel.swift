@@ -132,10 +132,14 @@ final class ExpensesViewModel {
                 let res: WorkOrderExpensesResponse = try await apiService.send(.getExpensesByWorkOrder(workOrderId: selectedWorkOrderId))
                 fetchedClaims = res.claims
             } else {
-                // query first few dispatches
-                for order in orders.prefix(4) {
-                    if let res: WorkOrderExpensesResponse = try? await apiService.send(.getExpensesByWorkOrder(workOrderId: order.id)) {
-                        fetchedClaims.append(contentsOf: res.claims)
+                // fetch all company expenses or query dispatches
+                if let listRes: ExpenseListResponse = try? await apiService.send(.getExpenses) {
+                    fetchedClaims = listRes.expenses
+                } else {
+                    for order in orders.prefix(6) {
+                        if let res: WorkOrderExpensesResponse = try? await apiService.send(.getExpensesByWorkOrder(workOrderId: order.id)) {
+                            fetchedClaims.append(contentsOf: res.claims)
+                        }
                     }
                 }
             }

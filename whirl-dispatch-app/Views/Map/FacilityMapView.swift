@@ -9,6 +9,9 @@ import SwiftUI
 import MapKit
 
 struct FacilityMapView: View {
+    var trackedSites: [TrackedSite] = []
+    @Binding var selectedTrackedSite: TrackedSite?
+
     @State private var facilities: [Facility] = []
     @State private var selectedFacility: Facility? = nil
     @State private var cameraPosition: MapCameraPosition = .automatic
@@ -20,26 +23,52 @@ struct FacilityMapView: View {
     private let locationManager = LocationManager.shared
     private let geofenceService = GeofenceService.shared
 
+    init(
+        trackedSites: [TrackedSite] = [],
+        selectedTrackedSite: Binding<TrackedSite?> = .constant(nil)
+    ) {
+        self.trackedSites = trackedSites
+        self._selectedTrackedSite = selectedTrackedSite
+    }
+
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                // native swiftui map with geofence circular overlays
-                Map(position: $cameraPosition, selection: $selectedFacility) {
-                    ForEach(facilities) { fac in
-                        // circular geofence perimeter boundary (150m-200m)
-                        MapCircle(center: fac.coordinate, radius: fac.geofenceRadius)
-                            .foregroundStyle(Color.accentBlue.opacity(0.18))
-                            .stroke(Color.accentBlue.opacity(0.7), lineWidth: 2)
+                // native swiftui map with geofence circular overlays and team markers
+                Map(position: $cameraPosition) {
+                    if !trackedSites.isEmpty {
+                        ForEach(trackedSites) { site in
+                            // circular geofence boundary around facility
+                            MapCircle(center: site.facility.coordinate, radius: site.facility.geofenceRadius)
+                                .foregroundStyle((site.isEmergency ? Color.red : (site.isOnSite ? Color.statusGreen : Color.accentBlue)).opacity(0.18))
+                                .stroke((site.isEmergency ? Color.red : (site.isOnSite ? Color.statusGreen : Color.accentBlue)).opacity(0.7), lineWidth: 2)
 
-                        // custom interactive plant room facility pin
-                        Annotation(fac.displayName, coordinate: fac.coordinate) {
-                            facilityPin(fac)
+                            // facility site pin
+                            Annotation(site.facility.facilityName, coordinate: site.facility.coordinate) {
+                                trackedFacilityPin(site)
+                            }
+
+                            // live technician team or vehicle marker
+                            Annotation(site.team.leadTechnician?.fullName ?? "Field Crew", coordinate: site.telemetry.coordinate) {
+                                trackedTeamMarker(site)
+                            }
                         }
-                        .tag(fac)
+                    } else {
+                        // fallback to standard facilities if no live tracked sites
+                        ForEach(facilities) { fac in
+                            MapCircle(center: fac.coordinate, radius: fac.geofenceRadius)
+                                .foregroundStyle(Color.accentBlue.opacity(0.18))
+                                .stroke(Color.accentBlue.opacity(0.7), lineWidth: 2)
+
+                            Annotation(fac.displayName, coordinate: fac.coordinate) {
+                                facilityPin(fac)
+                            }
+                            .tag(fac)
+                        }
                     }
 
-                    // technician live location marker
+                    // supervisor local device location marker
                     Annotation("My Location", coordinate: locationManager.effectiveCoordinate) {
                         technicianLiveMarker
                     }
@@ -85,22 +114,279 @@ struct FacilityMapView: View {
                     Spacer()
                 }
 
-                // bottom facility inspection card
-                if let fac = selectedFacility {
+                // bottom inspection card: tracked site or fallback facility
+                if let site = selectedTrackedSite {
+                    trackedSiteInspectionCard(site)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                } else if let fac = selectedFacility {
                     facilityInspectionCard(fac)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .padding(.horizontal, 16)
                         .padding(.bottom, 16)
                 }
             }
-            .navigationTitle("Facility Fleet Map")
+            .navigationTitle("Live Fleet & Site Map")
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 locationManager.startUpdating()
-                await loadFacilities()
+                if trackedSites.isEmpty {
+                    await loadFacilities()
+                } else {
+                    focusInitialTrackedSite()
+                }
+            }
+            .onChange(of: selectedTrackedSite) { _, newSite in
+                if let site = newSite {
+                    withAnimation(.easeInOut(duration: 0.6)) {
+                        cameraPosition = .region(
+                            MKCoordinateRegion(
+                                center: site.telemetry.coordinate,
+                                span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
+                            )
+                        )
+                    }
+                }
             }
         }
     }
+
+
+    // MARK: - Tracked Site Annotations
+
+    private func trackedFacilityPin(_ site: TrackedSite) -> some View {
+        let isSelected = selectedTrackedSite?.id == site.id
+
+        return VStack(spacing: 0) {
+            ZStack {
+                Circle()
+                    .fill(isSelected ? Color.brandNavy : (site.isEmergency ? Color.red : Color.accentBlue))
+                    .frame(width: isSelected ? 42 : 34, height: isSelected ? 42 : 34)
+                    .shadow(color: Color.black.opacity(0.25), radius: 4, x: 0, y: 2)
+
+                Image(systemName: "building.2.fill")
+                    .font(.system(size: isSelected ? 17 : 14))
+                    .foregroundColor(.white)
+            }
+
+            Image(systemName: "triangle.fill")
+                .font(.system(size: 9))
+                .foregroundColor(isSelected ? Color.brandNavy : (site.isEmergency ? Color.red : Color.accentBlue))
+                .rotationEffect(.degrees(180))
+                .offset(y: -2)
+        }
+        .onTapGesture {
+            withAnimation(.spring()) {
+                selectedTrackedSite = site
+            }
+        }
+    }
+
+    private func trackedTeamMarker(_ site: TrackedSite) -> some View {
+        let isSelected = selectedTrackedSite?.id == site.id
+
+        return VStack(spacing: 2) {
+            HStack(spacing: 4) {
+                if site.isOnSite {
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                        .font(.system(size: 11))
+                    Text(site.team.leadTechnician?.initials ?? "ON-SITE")
+                        .font(.system(size: 10, weight: .bold))
+                } else if site.isEnRoute {
+                    Image(systemName: "car.fill")
+                        .font(.system(size: 11))
+                    Text(site.vehicle?.licensePlate ?? "EN ROUTE")
+                        .font(.system(size: 10, weight: .bold))
+                } else {
+                    Image(systemName: "clock.fill")
+                        .font(.system(size: 11))
+                    Text(site.team.leadTechnician?.initials ?? "DISPATCH")
+                        .font(.system(size: 10, weight: .bold))
+                }
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(site.isOnSite ? Color.statusGreen : (site.isEnRoute ? Color.accentBlue : Color.statusAmber))
+            )
+            .foregroundColor(.white)
+            .overlay(
+                Capsule()
+                    .stroke(isSelected ? Color.white : Color.clear, lineWidth: 2)
+            )
+            .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+            .scaleEffect(isSelected ? 1.15 : 1.0)
+        }
+        .onTapGesture {
+            withAnimation(.spring()) {
+                selectedTrackedSite = site
+            }
+        }
+    }
+
+
+    // MARK: - Tracked Site Inspection Card
+
+    private func trackedSiteInspectionCard(_ site: TrackedSite) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(site.workOrderNumber)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.accentBlue)
+
+                        Text(site.status.label)
+                            .font(.system(size: 9, weight: .bold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                (site.isOnSite ? Color.statusGreen : (site.isEnRoute ? Color.accentBlue : Color.statusAmber)).opacity(0.15)
+                            )
+                            .foregroundColor(site.isOnSite ? Color.statusGreen : (site.isEnRoute ? Color.accentBlue : Color.statusAmber))
+                            .clipShape(Capsule())
+
+                        if site.isEmergency {
+                            Text("EMERGENCY")
+                                .font(.system(size: 9, weight: .bold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.red.opacity(0.15))
+                                .foregroundColor(Color.red)
+                                .clipShape(Capsule())
+                        }
+                    }
+
+                    Text(site.facility.facilityName)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(.primary)
+
+                    Text(site.facility.companyName)
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Button(action: {
+                    withAnimation {
+                        selectedTrackedSite = nil
+                    }
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            // telemetry location and geofence status
+            HStack(spacing: 8) {
+                Image(systemName: site.telemetry.isInsideGeofence ? "checkmark.shield.fill" : "location.north.circle.fill")
+                    .font(.system(size: 12))
+                Text(site.telemetry.isInsideGeofence ? "Within Plant Room Geofence (\(site.telemetry.formattedDistance))" : "Transit Distance to Facility: \(site.telemetry.formattedDistance)")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundColor(site.telemetry.isInsideGeofence ? Color.statusGreen : Color.accentBlue)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background((site.telemetry.isInsideGeofence ? Color.statusGreen : Color.accentBlue).opacity(0.12))
+            .cornerRadius(6)
+
+            Divider()
+
+            // team and vehicle details
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("DEPLOYED CREW")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.secondary)
+
+                    Text(site.team.leadTechnician?.fullName ?? "Unassigned")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    Text("\(site.team.totalHeadcount) total technicians")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text("ASSIGNED FLEET ASSET")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.secondary)
+
+                    if let veh = site.vehicle {
+                        Text(veh.name)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.primary)
+
+                        Text(veh.licensePlate)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.accentBlue)
+                    } else {
+                        Text("No Fleet Vehicle")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            // action buttons: call lead technician and directions
+            HStack(spacing: 10) {
+                if let phone = site.team.leadTechnician?.phone, let phoneURL = URL(string: "tel:\(phone)") {
+                    Link(destination: phoneURL) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "phone.fill")
+                            Text("Call Lead Tech")
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.brandNavy)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                    }
+                }
+
+                Button(action: {
+                    openInAppleMaps(site.facility)
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                        Text("Directions")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color(uiColor: .tertiarySystemFill))
+                    .foregroundColor(.primary)
+                    .cornerRadius(8)
+                }
+            }
+        }
+        .padding(16)
+        .background(.ultraThickMaterial)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
+    }
+
+    private func focusInitialTrackedSite() {
+        if let first = selectedTrackedSite ?? trackedSites.first {
+            cameraPosition = .region(
+                MKCoordinateRegion(
+                    center: first.telemetry.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                )
+            )
+        }
+    }
+
+
+
 
 
     // MARK: - Annotation Views
@@ -284,6 +570,12 @@ struct FacilityMapView: View {
     // MARK: - Helper Methods
 
     private func openInAppleMaps(_ fac: Facility) {
+        if let url = URL(string: "http://maps.apple.com/?daddr=\(fac.latitude),\(fac.longitude)&dirflg=d") {
+            UIApplication.shared.open(url)
+        }
+    }
+
+    private func openInAppleMaps(_ fac: TrackedFacility) {
         if let url = URL(string: "http://maps.apple.com/?daddr=\(fac.latitude),\(fac.longitude)&dirflg=d") {
             UIApplication.shared.open(url)
         }

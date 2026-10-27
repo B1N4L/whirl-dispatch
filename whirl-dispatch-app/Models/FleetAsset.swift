@@ -30,11 +30,16 @@ enum AssetStatus: String, Codable, CaseIterable {
     case underMaintenance = "UNDER_MAINTENANCE"
 }
 
-struct FleetAsset: Identifiable, Codable, Equatable {
+struct FleetAsset: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let assetCode: String
     let name: String
     let assetType: AssetType
-   let licensePlate: String
+    let licensePlate: String
     let status: AssetStatus
+}
+
+struct FleetListResponse: Codable {
+    let count: Int?
+    let fleet: [FleetAsset]
 }

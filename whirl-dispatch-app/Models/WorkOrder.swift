@@ -67,6 +67,7 @@ struct WorkOrder: Identifiable, Codable, Equatable, Hashable {
 
     // optional expanded relation when populated by backend
     var facility: Facility?
+    var fleetAsset: FleetAsset?
 
     // formatted display helpers
     var isEmergency: Bool {
@@ -92,4 +93,9 @@ struct WorkOrderDetailResponse: Codable {
 struct WorkOrderStatusUpdateResponse: Codable {
     let message: String?
     let workOrder: WorkOrder?
+}
+
+struct WorkOrderCreateResponse: Codable {
+    let message: String?
+    let workOrder: WorkOrder
 }

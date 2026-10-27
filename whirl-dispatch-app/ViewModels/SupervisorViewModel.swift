@@ -37,6 +37,16 @@ enum TechnicianShiftStatus: String, CaseIterable, Identifiable {
 }
 
 
+enum FleetMapFilter: String, CaseIterable, Identifiable {
+    case all = "All Active"
+    case onSite = "On-Site"
+    case enRoute = "En Route"
+    case dispatched = "Dispatched"
+
+    var id: String { rawValue }
+}
+
+
 struct TechnicianMember: Identifiable, Equatable {
     let id: String
     let name: String
@@ -56,8 +66,17 @@ final class SupervisorViewModel {
     var selectedWorkOrder: WorkOrder? = nil
     var selectedFilter: WorkOrderFilter = .all
     var technicians: [TechnicianMember] = []
+    var technicianItems: [TechnicianItem] = []
+    var facilities: [Facility] = []
+    var fleetAssets: [FleetAsset] = []
     var pendingExpenses: [ExpenseClaim] = []
     var selectedExpense: ExpenseClaim? = nil
+
+    // live fleet map tracking
+    var trackedSites: [TrackedSite] = []
+    var selectedTrackedSite: TrackedSite? = nil
+    var fleetMapFilter: FleetMapFilter = .all
+    var fleetSearchQuery: String = ""
 
     var isLoading: Bool = false
     var errorMessage: String? = nil
@@ -75,6 +94,53 @@ final class SupervisorViewModel {
         setupInitialTeamRoster()
     }
 
+    // tracked sites filtered by status and search query
+    var filteredTrackedSites: [TrackedSite] {
+        var list = trackedSites
+        switch fleetMapFilter {
+        case .all:
+            break
+        case .onSite:
+            list = list.filter { $0.isOnSite }
+        case .enRoute:
+            list = list.filter { $0.isEnRoute }
+        case .dispatched:
+            list = list.filter { $0.isDispatched }
+        }
+
+        let query = fleetSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !query.isEmpty {
+            list = list.filter { site in
+                site.facility.facilityName.lowercased().contains(query) ||
+                site.facility.companyName.lowercased().contains(query) ||
+                site.workOrderNumber.lowercased().contains(query) ||
+                (site.team.leadTechnician?.fullName.lowercased().contains(query) ?? false) ||
+                (site.vehicle?.licensePlate.lowercased().contains(query) ?? false)
+            }
+        }
+
+        return list
+    }
+
+    // Available lead technicians for new dispatch assignment
+    var availableLeadTechnicians: [TechnicianItem] {
+        let leads = technicianItems.filter { $0.role == .leadTechnician && $0.isAvailable }
+        if !leads.isEmpty {
+            return leads
+        }
+        // Fallback to any available senior field technicians if all lead technicians are deployed
+        return technicianItems.filter { $0.isAvailable }
+    }
+
+    // Available field crew technicians (excluding active assignments)
+    var availableCrewTechnicians: [TechnicianItem] {
+        technicianItems.filter { $0.isAvailable }
+    }
+
+    // Available fleet vehicles
+    var availableFleetVehicles: [FleetAsset] {
+        fleetAssets.filter { $0.status == .available }
+    }
 
     // dispatches filtered by status
     var filteredWorkOrders: [WorkOrder] {
@@ -104,23 +170,122 @@ final class SupervisorViewModel {
     }
 
 
-    // load all live work orders and associated expenses
+    // load all live work orders, facilities, fleet, technicians, and associated expenses
     func loadSupervisorData() async {
         isLoading = true
         errorMessage = nil
 
-        let (orders, _, _) = await repository.fetchWorkOrders()
+        async let ordersTask = repository.fetchWorkOrders()
+        async let facilitiesTask: FacilityListResponse? = try? apiService.send(.getFacilities)
+        async let fleetTask: FleetListResponse? = try? apiService.send(.getFleet)
+        async let techsTask: TechniciansResponse? = try? apiService.send(.getTechnicians)
+        async let trackingTask: FleetTrackingResponse? = try? apiService.send(.getFleetTracking)
+
+        let ((orders, _, _), facilitiesRes, fleetRes, techsRes, trackingRes) = await (ordersTask, facilitiesTask, fleetTask, techsTask, trackingTask)
         self.workOrders = orders
+
+        if let facs = facilitiesRes?.facilities, !facs.isEmpty {
+            self.facilities = facs
+        }
+        if let fleet = fleetRes?.fleet, !fleet.isEmpty {
+            self.fleetAssets = fleet
+        }
+        if let techItems = techsRes?.technicians, !techItems.isEmpty {
+            self.technicianItems = techItems
+            self.technicians = techItems.map { item in
+                let shiftStatus: TechnicianShiftStatus
+                switch item.status {
+                case "Active On-Site": shiftStatus = .onSite
+                case "En Route": shiftStatus = .enRoute
+                default: shiftStatus = .available
+                }
+                return TechnicianMember(
+                    id: item.id,
+                    name: item.fullName,
+                    roleTitle: item.role == .leadTechnician ? "Lead Technician" : "Field Technician",
+                    status: shiftStatus,
+                    assignedWorkOrderTitle: item.activeWorkOrderTitle ?? item.activeWorkOrderNumber,
+                    facilityName: item.facilityName ?? "Central Operations Base",
+                    contactNumber: item.phone ?? "+94 77 000 0000",
+                    lastSeenText: item.isAvailable ? "Ready for Dispatch" : (item.facilityName ?? "On Site")
+                )
+            }
+        }
+
+        if let tracking = trackingRes?.trackedSites, !tracking.isEmpty {
+            self.trackedSites = tracking
+            if selectedTrackedSite == nil || !tracking.contains(where: { $0.id == selectedTrackedSite?.id }) {
+                self.selectedTrackedSite = tracking.first
+            }
+        } else {
+            // Synthesize from active uncompleted dispatches if tracking endpoint is unreachable
+            let activeOrders = orders.filter { $0.status != .completed && $0.status != .billed && $0.status != .cancelled }
+            let synthesized = activeOrders.compactMap { order -> TrackedSite? in
+                guard let fac = order.facility else { return nil }
+                let leadMember = technicians.first(where: { $0.id == order.leadTechnicianId })
+                let leadTech = TrackedTechnician(
+                    id: order.leadTechnicianId,
+                    fullName: leadMember?.name ?? "Lead Technician",
+                    email: "lead@whirldispatch.com",
+                    phone: leadMember?.contactNumber ?? "+94 77 123 4567",
+                    role: "Lead Technician"
+                )
+                let trackedFac = TrackedFacility(
+                    id: fac.id,
+                    companyName: fac.companyName,
+                    facilityName: fac.facilityName,
+                    address: fac.address,
+                    latitude: fac.latitude,
+                    longitude: fac.longitude,
+                    geofenceRadius: fac.geofenceRadius,
+                    contactPersonName: fac.contactPersonName,
+                    contactPhone: fac.contactPhone,
+                    slaResponseHours: fac.slaResponseHours
+                )
+                let isOnSite = (order.status == .onSiteActive)
+                let tele = SiteTelemetry(
+                    latitude: fac.latitude,
+                    longitude: fac.longitude,
+                    isInsideGeofence: isOnSite,
+                    distanceToFacilityMeters: isOnSite ? 15.0 : 1800.0,
+                    formattedDistance: isOnSite ? "15m" : "1.8km",
+                    lastPingTimestamp: ISO8601DateFormatter().string(from: Date())
+                )
+                return TrackedSite(
+                    workOrderId: order.id,
+                    workOrderNumber: order.workOrderNumber,
+                    title: order.title,
+                    description: order.description,
+                    status: order.status,
+                    priority: order.priority,
+                    scheduledStartTime: order.scheduledStartTime,
+                    scheduledEndTime: order.scheduledEndTime,
+                    facility: trackedFac,
+                    team: TrackedTeam(leadTechnician: leadTech, crew: [], totalHeadcount: 1),
+                    vehicle: order.fleetAsset,
+                    telemetry: tele
+                )
+            }
+            self.trackedSites = synthesized
+            if selectedTrackedSite == nil {
+                self.selectedTrackedSite = synthesized.first
+            }
+        }
 
         if selectedWorkOrder == nil {
             self.selectedWorkOrder = orders.first
         }
 
-        // load claims across dispatches for approval queue
+        // load claims across dispatches for approval queue directly via GET /api/expenses
         var claims: [ExpenseClaim] = []
-        for order in orders.prefix(5) {
-            if let res: WorkOrderExpensesResponse = try? await apiService.send(.getExpensesByWorkOrder(workOrderId: order.id)) {
-                claims.append(contentsOf: res.claims)
+        if let listRes: ExpenseListResponse = try? await apiService.send(.getExpenses) {
+            claims = listRes.expenses
+        } else {
+            // fallback across recent dispatches
+            for order in orders.prefix(8) {
+                if let res: WorkOrderExpensesResponse = try? await apiService.send(.getExpensesByWorkOrder(workOrderId: order.id)) {
+                    claims.append(contentsOf: res.claims)
+                }
             }
         }
 
@@ -140,6 +305,104 @@ final class SupervisorViewModel {
         }
 
         isLoading = false
+    }
+
+    // create new dispatch work order and notify team
+    func createDispatch(
+        facilityId: String,
+        leadTechId: String,
+        crewIds: [String],
+        vehicleId: String?,
+        title: String,
+        description: String,
+        priority: WorkOrderPriority,
+        startTime: Date,
+        endTime: Date
+    ) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let startStr = isoFormatter.string(from: startTime)
+        let endStr = isoFormatter.string(from: endTime)
+
+        do {
+            let response: WorkOrderCreateResponse = try await apiService.send(
+                .createWorkOrder(
+                    clientFacilityId: facilityId,
+                    leadTechnicianId: leadTechId,
+                    assignedFleetAssetId: vehicleId,
+                    assignedTechnicianIds: crewIds,
+                    title: title,
+                    description: description,
+                    priority: priority.rawValue,
+                    scheduledStartTime: startStr,
+                    scheduledEndTime: endStr
+                )
+            )
+
+            var created = response.workOrder
+            if created.facility == nil {
+                created.facility = facilities.first(where: { $0.id == facilityId })
+            }
+            self.workOrders.insert(created, at: 0)
+            self.selectedWorkOrder = created
+
+            // Trigger native UserNotifications banner
+            let leadTechName = technicianItems.first(where: { $0.id == leadTechId })?.fullName ?? "Lead Technician"
+            let facilityName = created.facility?.facilityName ?? "Commercial Site"
+            NotificationService.shared.scheduleDispatchNotification(
+                workOrderNumber: created.workOrderNumber,
+                title: created.title,
+                facilityName: facilityName,
+                leadTechName: leadTechName
+            )
+
+            // Refresh technician availability to reflect new active assignment
+            if let refreshedTechs: TechniciansResponse = try? await apiService.send(.getTechnicians) {
+                self.technicianItems = refreshedTechs.technicians
+                self.technicians = refreshedTechs.technicians.map { item in
+                    let shiftStatus: TechnicianShiftStatus
+                    switch item.status {
+                    case "Active On-Site": shiftStatus = .onSite
+                    case "En Route": shiftStatus = .enRoute
+                    default: shiftStatus = .available
+                    }
+                    return TechnicianMember(
+                        id: item.id,
+                        name: item.fullName,
+                        roleTitle: item.role == .leadTechnician ? "Lead Technician" : "Field Technician",
+                        status: shiftStatus,
+                        assignedWorkOrderTitle: item.activeWorkOrderTitle ?? item.activeWorkOrderNumber,
+                        facilityName: item.facilityName ?? "Central Operations Base",
+                        contactNumber: item.phone ?? "+94 77 000 0000",
+                        lastSeenText: item.isAvailable ? "Ready for Dispatch" : (item.facilityName ?? "On Site")
+                    )
+                }
+            }
+
+            // Update fleet vehicle status locally if allocated
+            if let vehicleId = vehicleId, let vIdx = fleetAssets.firstIndex(where: { $0.id == vehicleId }) {
+                let v = fleetAssets[vIdx]
+                fleetAssets[vIdx] = FleetAsset(
+                    id: v.id,
+                    assetCode: v.assetCode,
+                    name: v.name,
+                    assetType: v.assetType,
+                    licensePlate: v.licensePlate,
+                    status: .deployed
+                )
+            }
+
+            successToast = "Work order \(created.workOrderNumber) created and dispatched."
+            isLoading = false
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            isLoading = false
+            return false
+        }
     }
 
 
