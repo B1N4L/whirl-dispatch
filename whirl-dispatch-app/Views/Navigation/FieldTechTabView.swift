@@ -38,7 +38,7 @@ struct FieldTechTabView: View {
 
 
                 // tab 2: site attendance and clock-in
-                AttendanceView()
+                AttendanceView(authVM: authVM)
                     .tabItem {
                         Label("Attendance", systemImage: "clock.badge.checkmark.fill")
                     }

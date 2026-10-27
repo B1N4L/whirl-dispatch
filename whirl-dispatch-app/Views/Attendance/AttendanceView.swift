@@ -8,9 +8,18 @@
 import SwiftUI
 
 struct AttendanceView: View {
+    var authVM: AuthViewModel? = nil
     @State private var viewModel = AttendanceViewModel()
     @State private var offlineManager = OfflineModeManager.shared
     @State private var showingClockOutConfirmation = false
+    @State private var showingTeamSiteMap = false
+
+    private var isLeadOrSupervisor: Bool {
+        if let role = authVM?.currentUser?.role {
+            return role == .leadTechnician || role == .supervisor
+        }
+        return false
+    }
 
 
     var body: some View {
@@ -53,8 +62,9 @@ struct AttendanceView: View {
                             Menu {
                                 ForEach(viewModel.assignedWorkOrders) { order in
                                     Button(action: {
-                                        viewModel.selectedWorkOrder = order
-                                        _ = viewModel.evaluateGeofence()
+                                        Task {
+                                            await viewModel.selectWorkOrder(order)
+                                        }
                                     }) {
                                         HStack {
                                             Text("\(order.workOrderNumber): \(order.facility?.facilityName ?? order.title)")
@@ -72,16 +82,22 @@ struct AttendanceView: View {
                                             .fontWeight(.bold)
                                             .foregroundColor(.primary)
 
-                                        Text(viewModel.selectedWorkOrder?.facility?.companyName ?? "Tap to switch facility")
+                                        Text(viewModel.isClockedIn ? "Active shift in progress (facility locked)" : (viewModel.selectedWorkOrder?.facility?.companyName ?? "Tap to switch facility"))
                                             .font(.appCaption)
                                             .foregroundColor(.secondary)
                                     }
 
                                     Spacer()
 
-                                    Image(systemName: "chevron.up.chevron.down")
-                                        .font(.caption)
-                                        .foregroundColor(Color.accentBlue)
+                                    if !viewModel.isClockedIn {
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.caption)
+                                            .foregroundColor(Color.accentBlue)
+                                    } else {
+                                        Image(systemName: "lock.fill")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
                                 .padding(14)
                                 .background(
@@ -93,9 +109,56 @@ struct AttendanceView: View {
                                         .stroke(Color.surfaceBorder, lineWidth: 1)
                                 )
                             }
+                            .disabled(viewModel.isClockedIn)
                         }
                     }
                     .padding(.horizontal, 16)
+
+                    // View Employees Button for Lead Technician & Supervisor
+                    if isLeadOrSupervisor, let order = viewModel.selectedWorkOrder {
+                        Button(action: {
+                            showingTeamSiteMap = true
+                        }) {
+                            HStack(spacing: 12) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.brandNavy.opacity(0.12))
+                                        .frame(width: 36, height: 36)
+
+                                    Image(systemName: "person.3.sequence.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(Color.brandNavy)
+                                }
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("View Employees on Site")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.primary)
+
+                                    Text("Live geofence radar & crew location tracking")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.cardBackground)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.brandNavy.opacity(0.25), lineWidth: 1)
+                            )
+                        }
+                        .padding(.horizontal, 16)
+                    }
 
 
                     // geofence anti-ghost clocking validation card
@@ -116,24 +179,58 @@ struct AttendanceView: View {
                                     .font(.appCaption)
                                     .foregroundColor(.secondary)
 
-                                // testing simulator button for emulator verification
-                                if !eval.isInside {
-                                    Button(action: {
-                                        viewModel.simulateArrivalAtCurrentFacility()
-                                    }) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "location.north.circle.fill")
-                                            Text("Simulate Site Arrival (Testing)")
-                                                .font(.system(size: 11, weight: .bold))
+                                // testing simulator buttons for emulator verification
+                                HStack(spacing: 8) {
+                                    if !eval.isInside {
+                                        Button(action: {
+                                            viewModel.simulateArrivalAtCurrentFacility()
+                                        }) {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "location.north.circle.fill")
+                                                Text("Simulate Site Arrival (Testing)")
+                                                    .font(.system(size: 11, weight: .bold))
+                                            }
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background(Color.accentBlue.opacity(0.12))
+                                            .foregroundColor(Color.accentBlue)
+                                            .cornerRadius(6)
                                         }
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 5)
-                                        .background(Color.accentBlue.opacity(0.12))
-                                        .foregroundColor(Color.accentBlue)
-                                        .cornerRadius(6)
+                                    } else {
+                                        Button(action: {
+                                            viewModel.simulateDepartureFromCurrentFacility()
+                                        }) {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "location.slash.fill")
+                                                Text("Simulate Leaving Site (Testing)")
+                                                    .font(.system(size: 11, weight: .bold))
+                                            }
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background(Color.statusAmber.opacity(0.15))
+                                            .foregroundColor(Color.statusAmber)
+                                            .cornerRadius(6)
+                                        }
                                     }
-                                    .padding(.top, 4)
+
+                                    if viewModel.isSimulatedLocationActive {
+                                        Button(action: {
+                                            viewModel.resetSimulation()
+                                        }) {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "arrow.counterclockwise")
+                                                Text("Reset GPS")
+                                                    .font(.system(size: 11, weight: .semibold))
+                                            }
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 5)
+                                            .background(Color.secondary.opacity(0.12))
+                                            .foregroundColor(.secondary)
+                                            .cornerRadius(6)
+                                        }
+                                    }
                                 }
+                                .padding(.top, 4)
                             }
 
                             Spacer()
@@ -277,6 +374,11 @@ struct AttendanceView: View {
                 LocationManager.shared.startUpdating()
                 await viewModel.loadAttendanceData()
                 viewModel.evaluateGeofence()
+            }
+            .sheet(isPresented: $showingTeamSiteMap) {
+                if let order = viewModel.selectedWorkOrder {
+                    TeamSiteMapView(workOrderId: order.id)
+                }
             }
             .confirmationDialog(
                 "Clock Out of Shift?",

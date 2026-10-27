@@ -40,6 +40,99 @@ struct ModelDecodingTests {
         #expect(user.isActive == true)
     }
 
+    @Test func testMessageResponseDecoding() throws {
+        let json = """
+        {
+            "message": "Password changed successfully"
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(MessageResponse.self, from: json)
+        #expect(response.message == "Password changed successfully")
+    }
+
+    @Test func testProfileSectionEnumeration() {
+        let sections = ProfileSection.allCases
+        #expect(sections.count == 4)
+        #expect(ProfileSection.personalContact.iconName == "person.text.rectangle.fill")
+        #expect(ProfileSection.securityPassword.iconName == "lock.shield.fill")
+        #expect(ProfileSection.operationalRole.iconName == "briefcase.fill")
+        #expect(ProfileSection.sessionDevice.iconName == "server.rack")
+    }
+
+    @Test func testTeamSiteTelemetryDecoding() throws {
+        let json = """
+        {
+            "workOrderId": "wo-test-01",
+            "workOrderNumber": "WO-2026-8812",
+            "title": "HVAC Chiller Overhaul",
+            "status": "ON_SITE_ACTIVE",
+            "priority": "HIGH",
+            "facility": {
+                "id": "fac-01",
+                "companyName": "Hemas Manufacturing",
+                "facilityName": "Peliyagoda Plant",
+                "address": "Peliyagoda Industrial Park",
+                "latitude": 6.9602,
+                "longitude": 79.8892,
+                "geofenceRadius": 150.0,
+                "contactPersonName": "Sunil Dias",
+                "contactPhone": "+94771234567"
+            },
+            "team": [
+                {
+                    "id": "usr-lead-01",
+                    "fullName": "Kasun Perera",
+                    "email": "kasun.lead@whirldispatch.com",
+                    "phone": "+94712345678",
+                    "role": "LEAD_TECHNICIAN",
+                    "isLead": true,
+                    "isClockedIn": true,
+                    "sessionStatus": "ACTIVE_ON_SITE",
+                    "clockInTimestamp": "2026-10-28T02:00:00Z",
+                    "latitude": 6.9603,
+                    "longitude": 79.8893,
+                    "isInsideGeofence": true,
+                    "distanceToFacilityMeters": 18.5,
+                    "formattedDistance": "19m"
+                },
+                {
+                    "id": "usr-tech-01",
+                    "fullName": "Nuwan Silva",
+                    "email": "nuwan.tech@whirldispatch.com",
+                    "phone": "+94763456789",
+                    "role": "TECHNICIAN",
+                    "isLead": false,
+                    "isClockedIn": false,
+                    "sessionStatus": "EN_ROUTE",
+                    "clockInTimestamp": null,
+                    "latitude": 6.9450,
+                    "longitude": 79.8700,
+                    "isInsideGeofence": false,
+                    "distanceToFacilityMeters": 1850.0,
+                    "formattedDistance": "1.9km"
+                }
+            ],
+            "totalCrewCount": 2,
+            "clockedInCount": 1,
+            "insideGeofenceCount": 1
+        }
+        """.data(using: .utf8)!
+
+        let telemetry = try JSONDecoder().decode(TeamSiteTelemetryResponse.self, from: json)
+        #expect(telemetry.workOrderId == "wo-test-01")
+        #expect(telemetry.workOrderNumber == "WO-2026-8812")
+        #expect(telemetry.team.count == 2)
+        #expect(telemetry.team[0].isLead == true)
+        #expect(telemetry.team[0].initials == "KP")
+        #expect(telemetry.team[0].isInsideGeofence == true)
+        #expect(telemetry.team[1].isLead == false)
+        #expect(telemetry.team[1].initials == "NS")
+        #expect(telemetry.team[1].isInsideGeofence == false)
+        #expect(telemetry.insideGeofenceCount == 1)
+        #expect(telemetry.facility.geofenceRadius == 150.0)
+    }
+
 
     @Test func testFacilityJSONDecodingAndCoordinateConversion() throws {
         let json = """
@@ -297,5 +390,303 @@ struct ModelDecodingTests {
         #expect(firstOrder.facility?.contractHourlyRate == "95.00")
         #expect(firstOrder.facility?.partsMarkupPercent == "18.00")
         #expect(firstOrder.facility?.companyName == "Dialog Axiata PLC")
+    }
+
+
+    @Test func testTechniciansResponseDecodingAndAvailability() throws {
+        let json = """
+        {
+            "count": 2,
+            "technicians": [
+                {
+                    "id": "7e6582a2-65e8-4f73-a4d3-c43471317a27",
+                    "fullName": "Kasun Lead",
+                    "email": "lead@whirldispatch.com",
+                    "phone": "+94 77 000 0000",
+                    "role": "LEAD_TECHNICIAN",
+                    "isAvailable": true,
+                    "status": "Available",
+                    "activeWorkOrderId": null,
+                    "activeWorkOrderNumber": null,
+                    "activeWorkOrderTitle": null,
+                    "facilityName": null
+                },
+                {
+                    "id": "ecf2e9d8-a387-49a0-bc40-2b909d1abe0f",
+                    "fullName": "Dinesh Fernando",
+                    "email": "dinesh.tech@whirldispatch.com",
+                    "phone": "+94 75 456 7890",
+                    "role": "TECHNICIAN",
+                    "isAvailable": false,
+                    "status": "Active On-Site",
+                    "activeWorkOrderId": "wo-123",
+                    "activeWorkOrderNumber": "WO-2026-0002",
+                    "activeWorkOrderTitle": "Condenser Overhaul",
+                    "facilityName": "WTC West Tower"
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(TechniciansResponse.self, from: json)
+        #expect(response.count == 2)
+        #expect(response.technicians.count == 2)
+
+        let lead = response.technicians[0]
+        #expect(lead.fullName == "Kasun Lead")
+        #expect(lead.role == .leadTechnician)
+        #expect(lead.isAvailable == true)
+        #expect(lead.status == "Available")
+
+        let crew = response.technicians[1]
+        #expect(crew.fullName == "Dinesh Fernando")
+        #expect(crew.role == .technician)
+        #expect(crew.isAvailable == false)
+        #expect(crew.status == "Active On-Site")
+        #expect(crew.facilityName == "WTC West Tower")
+    }
+
+
+    @Test func testWorkOrderCreateResponseDecoding() throws {
+        let json = """
+        {
+            "message": "Work order created and dispatched successfully.",
+            "workOrder": {
+                "id": "bcb63fc7-2f6c-4abb-8f26-6a4139d6a5c8",
+                "workOrderNumber": "WO-2026-4845",
+                "clientFacilityId": "47676ffe-3c6e-400f-961b-f37e864c949b",
+                "supervisorId": "0b579731-de81-43b8-8284-c65bbc6db69f",
+                "leadTechnicianId": "7e6582a2-65e8-4f73-a4d3-c43471317a27",
+                "assignedFleetAssetId": "3fa5ff0c-0413-4ec2-84a7-d9d6272bb493",
+                "title": "Chiller Compressor Bearing Emergency Inspection",
+                "description": "Urgent vibration alarm triggered on chiller primary compressor shaft.",
+                "priority": "HIGH",
+                "status": "DISPATCHED",
+                "scheduledStartTime": "2026-10-27T14:00:00.000Z",
+                "scheduledEndTime": "2026-10-27T18:00:00.000Z",
+                "actualStartTime": null,
+                "actualEndTime": null
+            }
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(WorkOrderCreateResponse.self, from: json)
+        #expect(response.message == "Work order created and dispatched successfully.")
+        #expect(response.workOrder.workOrderNumber == "WO-2026-4845")
+        #expect(response.workOrder.priority == .high)
+        #expect(response.workOrder.status == .dispatched)
+    }
+
+
+    @Test func testFleetListResponseDecoding() throws {
+        let json = """
+        {
+            "count": 2,
+            "fleet": [
+                {
+                    "id": "3fa5ff0c-0413-4ec2-84a7-d9d6272bb493",
+                    "assetCode": "VAN-04",
+                    "name": "Toyota HiAce Field Service Van #04",
+                    "assetType": "VAN",
+                    "licensePlate": "WP-CAA-4404",
+                    "status": "AVAILABLE"
+                },
+                {
+                    "id": "d17f1336-8ca2-4acb-b867-02013894eac3",
+                    "assetCode": "CRANE-02",
+                    "name": "Tadano 15-Ton Mobile Crane Truck #02",
+                    "assetType": "CRANE_TRUCK",
+                    "licensePlate": "WP-DA-8902",
+                    "status": "DEPLOYED"
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(FleetListResponse.self, from: json)
+        #expect(response.count == 2)
+        #expect(response.fleet.count == 2)
+        #expect(response.fleet[0].assetCode == "VAN-04")
+        #expect(response.fleet[0].status == .available)
+        #expect(response.fleet[1].status == .deployed)
+    }
+
+
+    @Test func testNumericPriceResilienceInExpenseItemAndClaim() throws {
+        let json = """
+        {
+            "id": "cd0d58d9-0d64-4edd-b499-530a497d4ffd",
+            "workOrderId": "bcb63fc7-2f6c-4abb-8f26-6a4139d6a5c8",
+            "leadTechnicianId": "7e6582a2-65e8-4f73-a4d3-c43471317a27",
+            "vendorName": "Refrigeration Supplies Ltd",
+            "receiptNumber": "INV-8899",
+            "totalAmount": 90.5,
+            "currency": "USD",
+            "approvalStatus": "PENDING_SUPERVISOR_APPROVAL",
+            "items": [
+                {
+                    "id": "10711201-c1fa-4d04-ba5b-bf262ef382a6",
+                    "expenseClaimId": "cd0d58d9-0d64-4edd-b499-530a497d4ffd",
+                    "partDescription": "High Pressure Gauge Hose",
+                    "quantity": 2,
+                    "unitPrice": 45,
+                    "totalPrice": 90
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let claim = try JSONDecoder().decode(ExpenseClaim.self, from: json)
+        #expect(claim.id == "cd0d58d9-0d64-4edd-b499-530a497d4ffd")
+        #expect(claim.totalAmount == "90.50")
+        #expect(claim.approvalStatus == .pending)
+
+        let firstItem = try #require(claim.items?.first)
+        #expect(firstItem.unitPrice == "45.00")
+        #expect(firstItem.totalPrice == "90.00")
+    }
+
+
+    @Test func testExpenseListResponseDualKeyDecoding() throws {
+        let json = """
+        {
+            "count": 1,
+            "expenses": [
+                {
+                    "id": "exp-dual-01",
+                    "workOrderId": "wo-123",
+                    "leadTechnicianId": "tech-123",
+                    "vendorName": "Apex Supply",
+                    "totalAmount": "150.00",
+                    "approvalStatus": "PENDING_SUPERVISOR_APPROVAL"
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(ExpenseListResponse.self, from: json)
+        #expect(response.count == 1)
+        #expect(response.expenses.count == 1)
+        #expect(response.expenses[0].vendorName == "Apex Supply")
+    }
+
+
+    @Test func testCurrentAttendanceResponseDecoding() throws {
+        let activeJson = """
+        {
+            "active": true,
+            "session": {
+                "id": "att-current-01",
+                "workOrderId": "wo-991",
+                "technicianId": "tech-01",
+                "clockInTimestamp": "2026-10-27T08:00:00.000Z",
+                "clockOutTimestamp": null,
+                "totalBillableSeconds": 7200,
+                "totalBreakSeconds": 600,
+                "sessionStatus": "ACTIVE_ON_SITE"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let activeRes = try JSONDecoder().decode(CurrentAttendanceResponse.self, from: activeJson)
+        #expect(activeRes.active == true)
+        #expect(activeRes.session?.id == "att-current-01")
+        #expect(activeRes.session?.clockOutTimestamp == nil)
+        #expect(activeRes.session?.sessionStatus == .activeOnSite)
+
+        let inactiveJson = """
+        {
+            "active": false,
+            "session": null
+        }
+        """.data(using: .utf8)!
+
+        let inactiveRes = try JSONDecoder().decode(CurrentAttendanceResponse.self, from: inactiveJson)
+        #expect(inactiveRes.active == false)
+        #expect(inactiveRes.session == nil)
+    }
+
+
+    @Test func testFleetTrackingResponseDecodingAndTelemetry() throws {
+        let json = """
+        {
+            "count": 1,
+            "trackedSites": [
+                {
+                    "workOrderId": "wo-test-99",
+                    "workOrderNumber": "WO-2026-9911",
+                    "title": "Chiller Compressor Trip",
+                    "description": "Oil pressure failure on loop B",
+                    "status": "ON_SITE_ACTIVE",
+                    "priority": "CRITICAL_EMERGENCY",
+                    "scheduledStartTime": "2026-10-27T08:00:00Z",
+                    "scheduledEndTime": "2026-10-27T12:00:00Z",
+                    "facility": {
+                        "id": "fac-01",
+                        "companyName": "Metro Group",
+                        "facilityName": "Metro HQ",
+                        "address": "452 Galle Road",
+                        "latitude": 6.9271,
+                        "longitude": 79.8612,
+                        "geofenceRadius": 150.0,
+                        "contactPersonName": "Rohan",
+                        "contactPhone": "+94112345678",
+                        "slaResponseHours": 2
+                    },
+                    "team": {
+                        "leadTechnician": {
+                            "id": "usr-lead-01",
+                            "fullName": "Kasun Fernando",
+                            "email": "kasun@whirl.com",
+                            "phone": "+94778899001",
+                            "role": "LEAD_TECHNICIAN"
+                        },
+                        "crew": [
+                            {
+                                "id": "usr-tech-02",
+                                "fullName": "Nimal Silva",
+                                "email": "nimal@whirl.com",
+                                "phone": "+94778899002",
+                                "role": "TECHNICIAN"
+                            }
+                        ],
+                        "totalHeadcount": 2
+                    },
+                    "vehicle": {
+                        "id": "flt-01",
+                        "assetCode": "VAN-01",
+                        "name": "HiAce Van",
+                        "assetType": "VAN",
+                        "licensePlate": "WP-CAB-1234",
+                        "status": "DEPLOYED"
+                    },
+                    "telemetry": {
+                        "latitude": 6.92715,
+                        "longitude": 79.86125,
+                        "isInsideGeofence": true,
+                        "distanceToFacilityMeters": 15.0,
+                        "formattedDistance": "15m",
+                        "lastPingTimestamp": "2026-10-27T09:30:00Z"
+                    }
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(FleetTrackingResponse.self, from: json)
+        #expect(response.count == 1)
+        #expect(response.trackedSites.count == 1)
+
+        let site = response.trackedSites[0]
+        #expect(site.workOrderId == "wo-test-99")
+        #expect(site.isEmergency == true)
+        #expect(site.isOnSite == true)
+        #expect(site.isEnRoute == false)
+        #expect(site.facility.latitude == 6.9271)
+        #expect(site.team.leadTechnician?.initials == "KF")
+        #expect(site.team.totalHeadcount == 2)
+        #expect(site.vehicle?.licensePlate == "WP-CAB-1234")
+        #expect(site.telemetry.isInsideGeofence == true)
+        #expect(site.telemetry.formattedDistance == "15m")
     }
 }

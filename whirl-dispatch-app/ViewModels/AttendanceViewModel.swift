@@ -71,6 +71,27 @@ final class AttendanceViewModel {
         return String(format: "%.1f hrs", hours)
     }
 
+    // testing simulation states
+    var isSimulatedLocationActive: Bool {
+        locationManager.isSimulatedLocationActive
+    }
+
+    func simulateArrivalAtCurrentFacility() {
+        guard let fac = selectedWorkOrder?.facility else { return }
+        locationManager.simulateArrival(at: fac.coordinate)
+        _ = evaluateGeofence()
+    }
+
+    func simulateDepartureFromCurrentFacility() {
+        guard let fac = selectedWorkOrder?.facility else { return }
+        locationManager.simulateDeparture(from: fac.coordinate)
+        _ = evaluateGeofence()
+    }
+
+    func resetSimulation() {
+        locationManager.resetSimulation()
+        _ = evaluateGeofence()
+    }
 
     // load work orders and check for active attendance
     func loadAttendanceData() async {
@@ -86,30 +107,125 @@ final class AttendanceViewModel {
             self.selectedWorkOrder = orders.first(where: { $0.status == .onSiteActive || $0.status == .enRoute }) ?? orders.first
         }
 
-        // restore active session if present locally
-        if let order = selectedWorkOrder {
-            if let cached = await offlineStorage.fetchCachedAttendance(workOrderId: order.id) {
-                if cached.clockOutTimestamp == nil {
-                    self.currentSession = cached
-                    self.isClockedIn = true
-                    self.isOnBreak = (cached.sessionStatus == .onBreakViolation)
-                    self.elapsedSeconds = cached.totalBillableSeconds
-                    startTimer()
-                }
-            }
+        var activeFound = false
 
-            // fetch remote timeline if connected
+        // 1. Query remote active session if online
+        if !offlineManager.isPlantRoomOffline {
+            do {
+                let currentRes: CurrentAttendanceResponse = try await apiService.send(.getCurrentAttendance)
+                if currentRes.active, let active = currentRes.session {
+                    self.currentSession = active
+                    self.isClockedIn = true
+                    self.isOnBreak = (active.sessionStatus == .onBreakViolation)
+
+                    if let matchingOrder = self.assignedWorkOrders.first(where: { $0.id == active.workOrderId }) {
+                        self.selectedWorkOrder = matchingOrder
+                    }
+
+                    if let clockInDate = ISO8601DateFormatter().date(from: active.clockInTimestamp) {
+                        let totalElapsed = Int(Date().timeIntervalSince(clockInDate))
+                        self.elapsedSeconds = max(0, totalElapsed - active.totalBreakSeconds)
+                    } else {
+                        self.elapsedSeconds = active.totalBillableSeconds
+                    }
+                    self.breakSeconds = active.totalBreakSeconds
+                    startTimer()
+                    activeFound = true
+                    await offlineStorage.upsertAttendance(active, isSyncPending: false)
+                }
+            } catch {
+                // fall through to local cache or timeline
+            }
+        }
+
+        // 2. Fall back to local Core Data active session if offline or not returned by endpoint
+        if !activeFound {
+            if let activeCached = await offlineStorage.fetchActiveCachedAttendance() {
+                self.currentSession = activeCached
+                self.isClockedIn = true
+                self.isOnBreak = (activeCached.sessionStatus == .onBreakViolation)
+
+                if let matchingOrder = self.assignedWorkOrders.first(where: { $0.id == activeCached.workOrderId }) {
+                    self.selectedWorkOrder = matchingOrder
+                }
+
+                if let clockInDate = ISO8601DateFormatter().date(from: activeCached.clockInTimestamp) {
+                    let totalElapsed = Int(Date().timeIntervalSince(clockInDate))
+                    self.elapsedSeconds = max(0, totalElapsed - activeCached.totalBreakSeconds)
+                } else {
+                    self.elapsedSeconds = activeCached.totalBillableSeconds
+                }
+                self.breakSeconds = activeCached.totalBreakSeconds
+                startTimer()
+                activeFound = true
+            } else if let order = selectedWorkOrder, let cached = await offlineStorage.fetchCachedAttendance(workOrderId: order.id), cached.clockOutTimestamp == nil {
+                self.currentSession = cached
+                self.isClockedIn = true
+                self.isOnBreak = (cached.sessionStatus == .onBreakViolation)
+
+                if let clockInDate = ISO8601DateFormatter().date(from: cached.clockInTimestamp) {
+                    let totalElapsed = Int(Date().timeIntervalSince(clockInDate))
+                    self.elapsedSeconds = max(0, totalElapsed - cached.totalBreakSeconds)
+                } else {
+                    self.elapsedSeconds = cached.totalBillableSeconds
+                }
+                self.breakSeconds = cached.totalBreakSeconds
+                startTimer()
+                activeFound = true
+            } else {
+                self.currentSession = nil
+                self.isClockedIn = false
+                self.isOnBreak = false
+                self.elapsedSeconds = 0
+                self.breakSeconds = 0
+                stopTimer()
+            }
+        }
+
+        // 3. Load timeline history for the active or selected work order
+        if let order = selectedWorkOrder {
             if !offlineManager.isPlantRoomOffline {
                 do {
                     let res: AttendanceTimelineResponse = try await apiService.send(.getAttendanceHistory(workOrderId: order.id))
                     self.attendanceHistory = res.resolvedTimeline
+
+                    if !self.isClockedIn, let openSession = res.resolvedTimeline.first(where: { $0.clockOutTimestamp == nil }) {
+                        self.currentSession = openSession
+                        self.isClockedIn = true
+                        self.isOnBreak = (openSession.sessionStatus == .onBreakViolation)
+
+                        if let clockInDate = ISO8601DateFormatter().date(from: openSession.clockInTimestamp) {
+                            let totalElapsed = Int(Date().timeIntervalSince(clockInDate))
+                            self.elapsedSeconds = max(0, totalElapsed - openSession.totalBreakSeconds)
+                        } else {
+                            self.elapsedSeconds = openSession.totalBillableSeconds
+                        }
+                        self.breakSeconds = openSession.totalBreakSeconds
+                        startTimer()
+                    }
                 } catch {
                     // silently fall back if history endpoint returns 404
                 }
             }
         }
 
+        _ = evaluateGeofence()
         isLoading = false
+    }
+
+    func selectWorkOrder(_ order: WorkOrder) async {
+        guard !isClockedIn else { return }
+        self.selectedWorkOrder = order
+        _ = evaluateGeofence()
+
+        if !offlineManager.isPlantRoomOffline {
+            do {
+                let res: AttendanceTimelineResponse = try await apiService.send(.getAttendanceHistory(workOrderId: order.id))
+                self.attendanceHistory = res.resolvedTimeline
+            } catch {
+                self.attendanceHistory = []
+            }
+        }
     }
 
 
@@ -128,17 +244,6 @@ final class AttendanceViewModel {
         )
         self.geofenceEvaluation = eval
         return eval
-    }
-
-    func simulateArrivalAtCurrentFacility() {
-        guard let fac = selectedWorkOrder?.facility else { return }
-        locationManager.simulateArrival(at: fac.coordinate)
-        _ = evaluateGeofence()
-    }
-
-    func resetSimulation() {
-        locationManager.resetSimulation()
-        _ = evaluateGeofence()
     }
 
 
@@ -213,12 +318,14 @@ final class AttendanceViewModel {
     // clock out from active job shift
     func clockOut() async -> Bool {
         guard let order = selectedWorkOrder else { return false }
+        let targetWorkOrderId = currentSession?.workOrderId ?? order.id
 
         isLoading = true
         errorMessage = nil
 
-        let lat = order.facility?.latitude ?? 6.9175
-        let lng = order.facility?.longitude ?? 79.8580
+        let targetFacility = assignedWorkOrders.first(where: { $0.id == targetWorkOrderId })?.facility ?? order.facility
+        let lat = targetFacility?.latitude ?? 6.9175
+        let lng = targetFacility?.longitude ?? 79.8580
 
         if offlineManager.isPlantRoomOffline {
             // mark attendance as completed locally
@@ -236,17 +343,22 @@ final class AttendanceViewModel {
             self.isClockedIn = false
             self.isOnBreak = false
             self.currentSession = nil
+            self.elapsedSeconds = 0
+            self.breakSeconds = 0
             stopTimer()
             isLoading = false
             return true
         }
 
         do {
-            let res: ClockOutResponse = try await apiService.send(.clockOut(workOrderId: order.id, lat: lat, lng: lng))
+            let res: ClockOutResponse = try await apiService.send(.clockOut(workOrderId: targetWorkOrderId, lat: lat, lng: lng))
             self.attendanceHistory.insert(res.session, at: 0)
+            await offlineStorage.upsertAttendance(res.session, isSyncPending: false)
             self.isClockedIn = false
             self.isOnBreak = false
             self.currentSession = nil
+            self.elapsedSeconds = 0
+            self.breakSeconds = 0
             stopTimer()
             isLoading = false
             return true
