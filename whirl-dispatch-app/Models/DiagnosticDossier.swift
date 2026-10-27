@@ -118,6 +118,98 @@ struct DiagnosticDossier: Identifiable, Codable, Equatable {
     var isWorkApproved: Bool?
     var checklist: [DossierChecklistItem]?
     var photos: [DossierPhoto]?
+
+    init(
+        id: String,
+        workOrderId: String,
+        leadTechnicianId: String,
+        equipmentModel: String,
+        equipmentSerialNumber: String? = nil,
+        baselineSuctionPressurePsi: String? = nil,
+        postServiceSuctionPressurePsi: String? = nil,
+        baselineDischargePressurePsi: String? = nil,
+        postServiceDischargePressurePsi: String? = nil,
+        baselineMotorRunningAmps: String? = nil,
+        postServiceMotorRunningAmps: String? = nil,
+        technicianNotes: String? = nil,
+        supervisorReviewNotes: String? = nil,
+        isWorkApproved: Bool? = nil,
+        checklist: [DossierChecklistItem]? = nil,
+        photos: [DossierPhoto]? = nil
+    ) {
+        self.id = id
+        self.workOrderId = workOrderId
+        self.leadTechnicianId = leadTechnicianId
+        self.equipmentModel = equipmentModel
+        self.equipmentSerialNumber = equipmentSerialNumber
+        self.baselineSuctionPressurePsi = baselineSuctionPressurePsi
+        self.postServiceSuctionPressurePsi = postServiceSuctionPressurePsi
+        self.baselineDischargePressurePsi = baselineDischargePressurePsi
+        self.postServiceDischargePressurePsi = postServiceDischargePressurePsi
+        self.baselineMotorRunningAmps = baselineMotorRunningAmps
+        self.postServiceMotorRunningAmps = postServiceMotorRunningAmps
+        self.technicianNotes = technicianNotes
+        self.supervisorReviewNotes = supervisorReviewNotes
+        self.isWorkApproved = isWorkApproved
+        self.checklist = checklist
+        self.photos = photos
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, workOrderId, leadTechnicianId, equipmentModel, equipmentSerialNumber
+        case baselineSuctionPressurePsi, postServiceSuctionPressurePsi
+        case baselineDischargePressurePsi, postServiceDischargePressurePsi
+        case baselineMotorRunningAmps, postServiceMotorRunningAmps
+        case technicianNotes, diagnosticNotes
+        case supervisorReviewNotes, isWorkApproved
+        case checklist, checklistItems
+        case photos, proofPhotos
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        workOrderId = try container.decode(String.self, forKey: .workOrderId)
+        leadTechnicianId = try container.decode(String.self, forKey: .leadTechnicianId)
+        equipmentModel = try container.decode(String.self, forKey: .equipmentModel)
+        equipmentSerialNumber = try container.decodeIfPresent(String.self, forKey: .equipmentSerialNumber)
+        baselineSuctionPressurePsi = try container.decodeIfPresent(String.self, forKey: .baselineSuctionPressurePsi)
+        postServiceSuctionPressurePsi = try container.decodeIfPresent(String.self, forKey: .postServiceSuctionPressurePsi)
+        baselineDischargePressurePsi = try container.decodeIfPresent(String.self, forKey: .baselineDischargePressurePsi)
+        postServiceDischargePressurePsi = try container.decodeIfPresent(String.self, forKey: .postServiceDischargePressurePsi)
+        baselineMotorRunningAmps = try container.decodeIfPresent(String.self, forKey: .baselineMotorRunningAmps)
+        postServiceMotorRunningAmps = try container.decodeIfPresent(String.self, forKey: .postServiceMotorRunningAmps)
+
+        technicianNotes = try container.decodeIfPresent(String.self, forKey: .technicianNotes)
+            ?? container.decodeIfPresent(String.self, forKey: .diagnosticNotes)
+        supervisorReviewNotes = try container.decodeIfPresent(String.self, forKey: .supervisorReviewNotes)
+        isWorkApproved = try container.decodeIfPresent(Bool.self, forKey: .isWorkApproved)
+
+        checklist = try container.decodeIfPresent([DossierChecklistItem].self, forKey: .checklist)
+            ?? container.decodeIfPresent([DossierChecklistItem].self, forKey: .checklistItems)
+        photos = try container.decodeIfPresent([DossierPhoto].self, forKey: .photos)
+            ?? container.decodeIfPresent([DossierPhoto].self, forKey: .proofPhotos)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(workOrderId, forKey: .workOrderId)
+        try container.encode(leadTechnicianId, forKey: .leadTechnicianId)
+        try container.encode(equipmentModel, forKey: .equipmentModel)
+        try container.encodeIfPresent(equipmentSerialNumber, forKey: .equipmentSerialNumber)
+        try container.encodeIfPresent(baselineSuctionPressurePsi, forKey: .baselineSuctionPressurePsi)
+        try container.encodeIfPresent(postServiceSuctionPressurePsi, forKey: .postServiceSuctionPressurePsi)
+        try container.encodeIfPresent(baselineDischargePressurePsi, forKey: .baselineDischargePressurePsi)
+        try container.encodeIfPresent(postServiceDischargePressurePsi, forKey: .postServiceDischargePressurePsi)
+        try container.encodeIfPresent(baselineMotorRunningAmps, forKey: .baselineMotorRunningAmps)
+        try container.encodeIfPresent(postServiceMotorRunningAmps, forKey: .postServiceMotorRunningAmps)
+        try container.encodeIfPresent(technicianNotes, forKey: .technicianNotes)
+        try container.encodeIfPresent(supervisorReviewNotes, forKey: .supervisorReviewNotes)
+        try container.encodeIfPresent(isWorkApproved, forKey: .isWorkApproved)
+        try container.encodeIfPresent(checklist, forKey: .checklist)
+        try container.encodeIfPresent(photos, forKey: .photos)
+    }
 }
 
 
@@ -125,6 +217,14 @@ struct DossierResponse: Codable {
     let dossier: DiagnosticDossier?
     let checklist: [DossierChecklistItem]?
     let photos: [DossierPhoto]?
+
+    var resolvedChecklist: [DossierChecklistItem] {
+        checklist ?? dossier?.checklist ?? []
+    }
+
+    var resolvedPhotos: [DossierPhoto] {
+        photos ?? dossier?.photos ?? []
+    }
 }
 
 struct SaveDossierResponse: Codable {

@@ -58,8 +58,20 @@ struct ClockOutResponse: Codable {
 }
 
 struct AttendanceTimelineResponse: Codable {
-    let timeline: [AttendanceRecord]
+    let workOrderId: String?
+    let count: Int?
+    let sessions: [AttendanceRecord]?
+    let timeline: [AttendanceRecord]?
     let totalRecordedHours: Double?
+
+    var resolvedTimeline: [AttendanceRecord] {
+        sessions ?? timeline ?? []
+    }
+}
+
+struct BoundaryEventResponse: Codable {
+    let message: String?
+    let sessionStatus: String?
 }
 
 

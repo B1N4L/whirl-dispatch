@@ -246,4 +246,56 @@ struct ModelDecodingTests {
         #expect(invoice.formattedLaborTotal == "$382.50")
         #expect(invoice.formattedPartsTotal == "$294.60")
     }
+
+
+    @Test func testNeonDBEnvelopeAndNumericRateDecoding() throws {
+        let envelopeJson = """
+        {
+            "count": 1,
+            "workOrders": [
+                {
+                    "id": "392a4c30-a41d-431e-b2a9-b5acdea53753",
+                    "workOrderNumber": "WO-2026-8173",
+                    "clientFacilityId": "0eb3bf55-916f-4c59-8fe1-5963076fc6da",
+                    "supervisorId": "0b579731-de81-43b8-8284-c65bbc6db69f",
+                    "leadTechnicianId": "d33fe7a4-28ca-4e4d-bcad-655ef8418447",
+                    "assignedFleetAssetId": "d17f1336-8ca2-4acb-b867-02013894eac3",
+                    "title": "Commercial HVAC Quarterly Invoicing Audit",
+                    "description": "Scheduled preventive overhaul.",
+                    "priority": "HIGH",
+                    "status": "BILLED",
+                    "scheduledStartTime": "2026-10-25T19:01:50.255Z",
+                    "scheduledEndTime": "2026-10-26T00:01:50.255Z",
+                    "actualStartTime": "2026-10-25T19:01:52.891Z",
+                    "actualEndTime": null,
+                    "facility": {
+                        "id": "0eb3bf55-916f-4c59-8fe1-5963076fc6da",
+                        "companyName": "Dialog Axiata PLC",
+                        "facilityName": "Dialog Headquarters Data Center AHU",
+                        "address": "475 Union Place, Colombo 02",
+                        "latitude": 6.918,
+                        "longitude": 79.862,
+                        "geofenceRadius": 100.0,
+                        "contactPersonName": "Sunil Perera",
+                        "contactPhone": "+94 11 710 0100",
+                        "contactEmail": "sunil.p@dialog.lk",
+                        "slaResponseHours": 2,
+                        "contractHourlyRate": 95,
+                        "partsMarkupPercent": 18
+                    }
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(WorkOrdersResponse.self, from: envelopeJson)
+        #expect(response.count == 1)
+        #expect(response.workOrders.count == 1)
+
+        let firstOrder = response.workOrders[0]
+        #expect(firstOrder.workOrderNumber == "WO-2026-8173")
+        #expect(firstOrder.facility?.contractHourlyRate == "95.00")
+        #expect(firstOrder.facility?.partsMarkupPercent == "18.00")
+        #expect(firstOrder.facility?.companyName == "Dialog Axiata PLC")
+    }
 }

@@ -45,6 +45,69 @@ struct User: Identifiable, Codable, Equatable {
     let isActive: Bool?
     let createdAt: String?
 
+    init(
+        id: String,
+        email: String,
+        fullName: String,
+        phone: String? = nil,
+        role: UserRole,
+        hourlyLaborRate: String? = nil,
+        biometricEnrolled: Bool? = nil,
+        isActive: Bool? = nil,
+        createdAt: String? = nil
+    ) {
+        self.id = id
+        self.email = email
+        self.fullName = fullName
+        self.phone = phone
+        self.role = role
+        self.hourlyLaborRate = hourlyLaborRate
+        self.biometricEnrolled = biometricEnrolled
+        self.isActive = isActive
+        self.createdAt = createdAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, email, fullName, phone, role
+        case hourlyLaborRate, biometricEnrolled, isActive, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        email = try container.decode(String.self, forKey: .email)
+        fullName = try container.decode(String.self, forKey: .fullName)
+        phone = try container.decodeIfPresent(String.self, forKey: .phone)
+        role = try container.decode(UserRole.self, forKey: .role)
+
+        if let str = try? container.decodeIfPresent(String.self, forKey: .hourlyLaborRate) {
+            hourlyLaborRate = str
+        } else if let num = try? container.decodeIfPresent(Double.self, forKey: .hourlyLaborRate) {
+            hourlyLaborRate = String(format: "%.2f", num)
+        } else if let intVal = try? container.decodeIfPresent(Int.self, forKey: .hourlyLaborRate) {
+            hourlyLaborRate = "\(intVal).00"
+        } else {
+            hourlyLaborRate = nil
+        }
+
+        biometricEnrolled = try container.decodeIfPresent(Bool.self, forKey: .biometricEnrolled)
+        isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive)
+        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(email, forKey: .email)
+        try container.encode(fullName, forKey: .fullName)
+        try container.encodeIfPresent(phone, forKey: .phone)
+        try container.encode(role, forKey: .role)
+        try container.encodeIfPresent(hourlyLaborRate, forKey: .hourlyLaborRate)
+        try container.encodeIfPresent(biometricEnrolled, forKey: .biometricEnrolled)
+        try container.encodeIfPresent(isActive, forKey: .isActive)
+        try container.encodeIfPresent(createdAt, forKey: .createdAt)
+    }
+
 
     // convenient display initials
     var initials: String {

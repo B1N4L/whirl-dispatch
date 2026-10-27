@@ -30,7 +30,13 @@ final class WorkOrderRepository: @unchecked Sendable {
       }
 
       do {
-          let remoteOrders: [WorkOrder] = try await apiService.send(.getWorkOrders)
+          // decode envelope wrapper or direct array if returned
+          let remoteOrders: [WorkOrder]
+          if let wrapper: WorkOrdersResponse = try? await apiService.send(.getWorkOrders) {
+              remoteOrders = wrapper.workOrders
+          } else {
+              remoteOrders = try await apiService.send(.getWorkOrders)
+          }
 
           // cache in background for offline use later
           await offlineStorage.upsertWorkOrders(remoteOrders)
@@ -57,7 +63,12 @@ final class WorkOrderRepository: @unchecked Sendable {
         }
 
         do {
-            let remote: WorkOrder = try await apiService.send(.getWorkOrderDetail(id: id))
+            let remote: WorkOrder
+            if let wrapper: WorkOrderDetailResponse = try? await apiService.send(.getWorkOrderDetail(id: id)) {
+                remote = wrapper.workOrder
+            } else {
+                remote = try await apiService.send(.getWorkOrderDetail(id: id))
+            }
             await offlineStorage.upsertWorkOrders([remote])
             return (remote, false)
         } catch {
@@ -75,9 +86,14 @@ final class WorkOrderRepository: @unchecked Sendable {
       }
 
       do {
-          let _: WorkOrder = try await apiService.send(.updateWorkOrderStatus(id: id, status: status.rawValue))
-          await offlineStorage.updateWorkOrderStatus(id: id, status: status, isSyncPending: false)
-          return (true, false)
+          if let _: WorkOrderStatusUpdateResponse = try? await apiService.send(.updateWorkOrderStatus(id: id, status: status.rawValue)) {
+              await offlineStorage.updateWorkOrderStatus(id: id, status: status, isSyncPending: false)
+              return (true, false)
+          } else {
+              let _: WorkOrder = try await apiService.send(.updateWorkOrderStatus(id: id, status: status.rawValue))
+              await offlineStorage.updateWorkOrderStatus(id: id, status: status, isSyncPending: false)
+              return (true, false)
+          }
       } catch {
           // network down, save change locally and mark as pending sync
           await offlineStorage.updateWorkOrderStatus(id: id, status: status, isSyncPending: true)

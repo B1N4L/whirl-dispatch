@@ -77,3 +77,19 @@ struct WorkOrder: Identifiable, Codable, Equatable, Hashable {
         status == .dispatched || status == .enRoute
     }
 }
+
+
+// response wrappers for backend work order endpoints
+struct WorkOrdersResponse: Codable {
+    let count: Int?
+    let workOrders: [WorkOrder]
+}
+
+struct WorkOrderDetailResponse: Codable {
+    let workOrder: WorkOrder
+}
+
+struct WorkOrderStatusUpdateResponse: Codable {
+    let message: String?
+    let workOrder: WorkOrder?
+}

@@ -64,8 +64,8 @@ enum APIEndpoint {
         case .getInvoice(let id): return "/billing/invoices/\(id)"
         case .updateInvoiceStatus(let id, _): return "/billing/invoices/\(id)/status"
         case .getBillingInvoices: return "/billing"
-        case .getDossier(let workOrderId): return "/dossiers/\(workOrderId)"
-        case .saveDossier(let workOrderId, _): return "/dossiers/\(workOrderId)"
+        case .getDossier(let workOrderId): return "/dossiers/work-order/\(workOrderId)"
+        case .saveDossier: return "/dossiers"
         }
     }
 
@@ -73,9 +73,9 @@ enum APIEndpoint {
         switch self {
         case .health, .getFacilities, .getFleet, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getExpensesByWorkOrder, .getBillingInvoices, .getInvoice, .getDossier, .getAttendanceHistory:
             return .get
-        case .login, .clockIn, .clockOut, .pauseBreak, .submitExpense, .generateEstimate:
+        case .login, .clockIn, .clockOut, .pauseBreak, .submitExpense, .generateEstimate, .saveDossier:
             return .post
-        case .updateWorkOrderStatus, .approveExpense, .updateInvoiceStatus, .saveDossier:
+        case .updateWorkOrderStatus, .approveExpense, .updateInvoiceStatus:
             return .patch
         }
     }

@@ -102,7 +102,7 @@ final class AttendanceViewModel {
             if !offlineManager.isPlantRoomOffline {
                 do {
                     let res: AttendanceTimelineResponse = try await apiService.send(.getAttendanceHistory(workOrderId: order.id))
-                    self.attendanceHistory = res.timeline
+                    self.attendanceHistory = res.resolvedTimeline
                 } catch {
                     // silently fall back if history endpoint returns 404
                 }
@@ -268,7 +268,7 @@ final class AttendanceViewModel {
           let lat = order.facility?.latitude ?? 6.9175
           let lng = order.facility?.longitude ?? 79.8580
           do {
-              let _: [String: String] = try await apiService.send(.pauseBreak(workOrderId: order.id, lat: lat, lng: lng))
+              let _: BoundaryEventResponse = try await apiService.send(.pauseBreak(workOrderId: order.id, lat: lat, lng: lng))
           } catch {
               // ignore break logging network hiccups
           }

@@ -132,10 +132,12 @@ final class DossierViewModel {
                 self.postMotorAmps = dossier.postServiceMotorRunningAmps ?? self.postMotorAmps
                 self.diagnosticNotes = dossier.technicianNotes ?? ""
             }
-            if let list = res.checklist, !list.isEmpty {
+            let list = res.resolvedChecklist
+            if !list.isEmpty {
                 self.checklistItems = list
             }
-            if let p = res.photos, !p.isEmpty {
+            let p = res.resolvedPhotos
+            if !p.isEmpty {
                 self.photos = p
             }
         } catch {
