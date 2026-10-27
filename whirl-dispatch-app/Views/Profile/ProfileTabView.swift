@@ -9,13 +9,31 @@ import SwiftUI
 
 struct ProfileTabView: View {
     @Bindable var authVM: AuthViewModel
-    @State private var showingSignOutAlert = false
 
+    @State private var fullName: String = ""
+    @State private var email: String = ""
+    @State private var phone: String = ""
+    @State private var showingSignOutAlert = false
+    @State private var showingChangePasswordSheet = false
+    @State private var showSavedToast = false
+
+    private var hasChanges: Bool {
+        guard let user = authVM.currentUser else { return false }
+        let currentPhone = user.phone ?? ""
+        return fullName.trimmingCharacters(in: .whitespacesAndNewlines) != user.fullName ||
+               email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != user.email.lowercased() ||
+               phone.trimmingCharacters(in: .whitespacesAndNewlines) != currentPhone
+    }
+
+    private var isValid: Bool {
+        !fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        email.contains("@") && email.contains(".")
+    }
 
     var body: some View {
         List {
             if let user = authVM.currentUser {
-                // section 1: technician identity card
+                // Section 1: Identity Card
                 Section {
                     HStack(spacing: 16) {
                         ZStack {
@@ -57,23 +75,135 @@ struct ProfileTabView: View {
                     .padding(.vertical, 6)
                 }
 
+                // Alert feedback if active
+                if let err = authVM.errorMessage {
+                    Section {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.octagon.fill")
+                                .foregroundColor(Color.statusRed)
+                            Text(err)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(Color.statusRed)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
 
-                // section 2: operational parameters
-                Section("Operational Profile") {
+                if showSavedToast, let msg = authVM.successMessage {
+                    Section {
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(Color.statusGreen)
+                            Text(msg)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(Color.statusGreen)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
+                // Section 2: Editable Personal & Contact
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Full Name")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        TextField("Full Name", text: $fullName)
+                            .font(.system(size: 15))
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Corporate Email")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        TextField("Corporate Email", text: $email)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled(true)
+                            .font(.system(size: 15))
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Contact Phone")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        TextField("Phone Number", text: $phone)
+                            .keyboardType(.phonePad)
+                            .font(.system(size: 15))
+                    }
+
+                    if hasChanges {
+                        HStack(spacing: 12) {
+                            Button(action: saveProfile) {
+                                HStack {
+                                    Spacer()
+                                    if authVM.isLoading {
+                                        ProgressView()
+                                            .tint(.white)
+                                            .padding(.trailing, 4)
+                                    }
+                                    Text("Save Changes")
+                                        .fontWeight(.bold)
+                                    Spacer()
+                                }
+                                .padding(.vertical, 8)
+                            }
+                            .disabled(!isValid || authVM.isLoading)
+                            .buttonStyle(.borderedProminent)
+                            .tint(Color.brandNavy)
+
+                            Button("Discard", action: resetFields)
+                                .buttonStyle(.bordered)
+                        }
+                        .padding(.top, 4)
+                    }
+                } header: {
+                    Text("Personal & Contact Details")
+                } footer: {
+                    Text("Changes to your corporate email or emergency contact phone will sync across dispatch services.")
+                        .font(.caption2)
+                }
+
+                // Section 3: Security & Credentials
+                Section("Security & Credentials") {
+                    Button(action: {
+                        showingChangePasswordSheet = true
+                    }) {
+                        HStack {
+                            Label("Change Account Password", systemImage: "key.fill")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    HStack {
+                        Label(authVM.biometricType.title, systemImage: authVM.biometricType.iconName)
+                        Spacer()
+                        Text(authVM.isBiometricAvailable ? "Supported" : "Unavailable")
+                            .foregroundColor(authVM.isBiometricAvailable ? Color.statusGreen : .secondary)
+                    }
+
+                    HStack {
+                        Label("Saved Credentials", systemImage: "lock.shield.fill")
+                        Spacer()
+                        Text("iOS Keychain")
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // Section 4: Operational Parameters (Locked)
+                Section {
                     HStack {
                         Label("Operational Role", systemImage: "person.badge.shield.checkmark.fill")
                         Spacer()
                         Text(user.role.displayName)
                             .foregroundColor(.secondary)
-                    }
-
-                    if let phone = user.phone, !phone.isEmpty {
-                        HStack {
-                            Label("Emergency Phone", systemImage: "phone.fill")
-                            Spacer()
-                            Text(phone)
-                                .foregroundColor(.secondary)
-                        }
+                        Image(systemName: "lock.fill")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
                     }
 
                     if let rate = user.hourlyLaborRate {
@@ -84,27 +214,27 @@ struct ProfileTabView: View {
                                 .font(.appMono)
                                 .fontWeight(.semibold)
                                 .foregroundColor(Color.brandNavy)
+                            Image(systemName: "lock.fill")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
                     }
+
+                    HStack {
+                        Label("Dispatch Status", systemImage: "checkmark.seal.fill")
+                        Spacer()
+                        Text("Active")
+                            .foregroundColor(Color.statusGreen)
+                    }
+                } header: {
+                    Text("Operational Profile")
+                } footer: {
+                    Text("Role assignments and billable labor rates are set by organization administrators.")
+                        .font(.caption2)
                 }
 
-
-                // section 3: device and security
-                Section("Security & Biometrics") {
-                    HStack {
-                        Label(authVM.biometricType.title, systemImage: authVM.biometricType.iconName)
-                        Spacer()
-                        Text(authVM.isBiometricAvailable ? "Supported" : "Unavailable")
-                            .foregroundColor(authVM.isBiometricAvailable ? Color.statusGreen : .secondary)
-                    }
-
-                    HStack {
-                        Label("Saved Credentials", systemImage: "key.fill")
-                        Spacer()
-                        Text("iOS Keychain")
-                            .foregroundColor(.secondary)
-                    }
-
+                // Section 5: Device & Session
+                Section {
                     HStack {
                         Label("Backend Gateway", systemImage: "server.rack")
                         Spacer()
@@ -112,11 +242,7 @@ struct ProfileTabView: View {
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
-                }
 
-
-                // section 4: sign out session trigger
-                Section {
                     Button(role: .destructive, action: {
                         showingSignOutAlert = true
                     }) {
@@ -145,6 +271,12 @@ struct ProfileTabView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Profile & Settings")
+        .onAppear {
+            resetFields()
+        }
+        .sheet(isPresented: $showingChangePasswordSheet) {
+            ChangePasswordSheet(authVM: authVM)
+        }
         .confirmationDialog(
             "Are you sure you want to sign out?",
             isPresented: $showingSignOutAlert,
@@ -159,8 +291,30 @@ struct ProfileTabView: View {
         }
     }
 
+    private func resetFields() {
+        if let user = authVM.currentUser {
+            fullName = user.fullName
+            email = user.email
+            phone = user.phone ?? ""
+        }
+    }
 
-    // role indicator color mapping
+    private func saveProfile() {
+        Task {
+            let success = await authVM.updateProfile(
+                fullName: fullName.trimmingCharacters(in: .whitespacesAndNewlines),
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                phone: phone.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            if success {
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+                showSavedToast = true
+            }
+        }
+    }
+
+    // Role indicator color mapping
     private func roleColor(for role: UserRole) -> Color {
         switch role {
         case .technician: return Color.accentBlue
@@ -170,7 +324,7 @@ struct ProfileTabView: View {
         }
     }
 
-    // custom role indicator pill
+    // Custom role indicator pill
     private func rolePill(role: UserRole) -> some View {
         let color = roleColor(for: role)
 
@@ -186,7 +340,6 @@ struct ProfileTabView: View {
             )
     }
 }
-
 
 #Preview {
     NavigationStack {

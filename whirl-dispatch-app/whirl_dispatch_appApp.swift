@@ -12,6 +12,13 @@ import CoreData
 struct whirl_dispatch_appApp: App {
     let persistenceController = PersistenceController.shared
 
+    init() {
+        _ = NotificationService.shared
+        Task { @MainActor in
+            _ = await NotificationService.shared.requestAuthorization()
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootCoordinatorView()

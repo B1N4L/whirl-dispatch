@@ -13,10 +13,12 @@ struct SupervisorSplitView: View {
     @State private var viewModel = SupervisorViewModel()
     @State private var selectedMenu: SupervisorMenu? = .activeDispatches
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var showNewDispatchSheet: Bool = false
     @State private var showReassignSheet: Bool = false
     @State private var showRejectSheet: Bool = false
     @State private var rejectionReasonInput: String = ""
     @State private var claimToReject: ExpenseClaim? = nil
+    @State private var selectedProfileSection: ProfileSection = .personalContact
 
 
     enum SupervisorMenu: String, CaseIterable, Identifiable {
@@ -81,10 +83,10 @@ struct SupervisorSplitView: View {
                         teamRosterContentList
 
                     case .fleetMap:
-                        fleetMapPlaceholderList
+                        fleetMapContentList
 
                     case .profile:
-                        ProfileTabView(authVM: authVM)
+                        ProfileSectionMenuView(authVM: authVM, selectedSection: $selectedProfileSection)
                     }
                 } else {
                     Text("Select a category")
@@ -124,10 +126,13 @@ struct SupervisorSplitView: View {
                         teamRosterDetailPane
 
                     case .fleetMap:
-                        FacilityMapView()
+                        FacilityMapView(
+                            trackedSites: viewModel.filteredTrackedSites,
+                            selectedTrackedSite: $viewModel.selectedTrackedSite
+                        )
 
                     case .profile:
-                        ProfileTabView(authVM: authVM)
+                        ProfileDetailPane(section: selectedProfileSection, authVM: authVM)
                     }
                 } else {
                     Text("Select an operation from the sidebar")
@@ -139,6 +144,12 @@ struct SupervisorSplitView: View {
         .navigationSplitViewStyle(.balanced)
         .task {
             await viewModel.loadSupervisorData()
+        }
+        .task(id: selectedMenu) {
+            await viewModel.loadSupervisorData()
+        }
+        .sheet(isPresented: $showNewDispatchSheet) {
+            NewDispatchSheet(viewModel: viewModel)
         }
         .sheet(isPresented: $showReassignSheet) {
             reassignCrewSheet
@@ -153,6 +164,41 @@ struct SupervisorSplitView: View {
 
     private var dispatchesContentList: some View {
         VStack(spacing: 0) {
+            // Action header on top
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Live Operations")
+                        .font(.appSubheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(Color.brandNavy)
+                    Text("\(viewModel.filteredWorkOrders.count) Dispatches")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    showNewDispatchSheet = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .bold))
+                        Text("Add Dispatch")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color.brandNavy)
+                    .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+
             // filter chips
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
@@ -229,6 +275,15 @@ struct SupervisorSplitView: View {
             .listStyle(.plain)
             .refreshable {
                 await viewModel.loadSupervisorData()
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showNewDispatchSheet = true
+                    } label: {
+                        Label("Add Dispatch", systemImage: "plus")
+                    }
+                }
             }
         }
     }
@@ -325,12 +380,156 @@ struct SupervisorSplitView: View {
         .listStyle(.plain)
     }
 
-    private var fleetMapPlaceholderList: some View {
-        List {
-            Text("Zone 1: Metro Commercial Center (Chiller 04)")
-            Text("Zone 2: Apex Healthcare Tower (Rooftop AHU)")
-            Text("Zone 3: North Central Data Center")
+    private var fleetMapContentList: some View {
+        VStack(spacing: 0) {
+            // Top segmented filter tab
+            Picker("Fleet Filter", selection: $viewModel.fleetMapFilter) {
+                ForEach(FleetMapFilter.allCases) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color(uiColor: .systemBackground))
+
+            // Quick search field
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                TextField("Search sites, techs, vehicles...", text: $viewModel.fleetSearchQuery)
+                    .font(.appSubheadline)
+                if !viewModel.fleetSearchQuery.isEmpty {
+                    Button(action: { viewModel.fleetSearchQuery = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(8)
+            .background(Color(uiColor: .secondarySystemBackground))
+            .cornerRadius(10)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+
+            Divider()
+
+            if viewModel.filteredTrackedSites.isEmpty {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Image(systemName: "map.fill")
+                        .font(.system(size: 38))
+                        .foregroundColor(.secondary.opacity(0.6))
+
+                    Text("No Active Sites")
+                        .font(.appHeadline)
+                        .foregroundColor(.primary)
+
+                    Text("No deployed technician teams currently match the '\(viewModel.fleetMapFilter.rawValue)' filter.")
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                    Spacer()
+                }
+            } else {
+                List(selection: $viewModel.selectedTrackedSite) {
+                    ForEach(viewModel.filteredTrackedSites) { site in
+                        trackedSiteFilterRow(site)
+                            .tag(site)
+                    }
+                }
+                .listStyle(.plain)
+                .refreshable {
+                    await viewModel.loadSupervisorData()
+                }
+            }
         }
+    }
+
+    private func trackedSiteFilterRow(_ site: TrackedSite) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(site.workOrderNumber)
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.accentBlue)
+
+                        if site.isEmergency {
+                            Text("EMERGENCY")
+                                .font(.system(size: 8, weight: .bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Color.red.opacity(0.12))
+                                .foregroundColor(Color.red)
+                                .clipShape(Capsule())
+                        }
+                    }
+
+                    Text(site.facility.facilityName)
+                        .font(.appHeadline)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+
+                    Text(site.facility.companyName)
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                // Status chip
+                Text(site.status.label)
+                    .font(.system(size: 10, weight: .bold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        (site.isOnSite ? Color.statusGreen : (site.isEnRoute ? Color.accentBlue : Color.statusAmber)).opacity(0.12)
+                    )
+                    .foregroundColor(site.isOnSite ? Color.statusGreen : (site.isEnRoute ? Color.accentBlue : Color.statusAmber))
+                    .clipShape(Capsule())
+            }
+
+            // Team and vehicle summary
+            HStack(spacing: 12) {
+                HStack(spacing: 4) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    Text(site.team.leadTechnician?.fullName ?? "Crew")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+
+                if let veh = site.vehicle {
+                    HStack(spacing: 4) {
+                        Image(systemName: "car.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                        Text(veh.licensePlate)
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                // Distance / geofence callout
+                HStack(spacing: 3) {
+                    Image(systemName: site.telemetry.isInsideGeofence ? "checkmark.circle.fill" : "arrow.triangle.turn.up.right.diamond.fill")
+                        .font(.system(size: 9))
+                    Text(site.telemetry.isInsideGeofence ? "On-Site" : site.telemetry.formattedDistance)
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .foregroundColor(site.telemetry.isInsideGeofence ? Color.statusGreen : Color.accentBlue)
+            }
+        }
+        .padding(.vertical, 4)
     }
 
 
@@ -868,6 +1067,7 @@ struct SupervisorCompactView: View {
     @Bindable var authVM: AuthViewModel
     @State private var viewModel = SupervisorViewModel()
     @State private var selectedTab: Int = 0
+    @State private var showNewDispatchSheet: Bool = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -889,6 +1089,18 @@ struct SupervisorCompactView: View {
                     .padding(.vertical, 4)
                 }
                 .navigationTitle("Dispatches")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            showNewDispatchSheet = true
+                        } label: {
+                            Label("Add Dispatch", systemImage: "plus")
+                        }
+                    }
+                }
+                .refreshable {
+                    await viewModel.loadSupervisorData()
+                }
             }
             .tabItem {
                 Label("Dispatches", systemImage: "list.bullet.clipboard.fill")
@@ -943,6 +1155,9 @@ struct SupervisorCompactView: View {
                     .padding(.vertical, 4)
                 }
                 .navigationTitle("Approvals Queue")
+                .refreshable {
+                    await viewModel.loadSupervisorData()
+                }
             }
             .tabItem {
                 Label("Approvals", systemImage: "checkmark.seal.fill")
@@ -950,7 +1165,10 @@ struct SupervisorCompactView: View {
             .tag(2)
 
             NavigationStack {
-                FacilityMapView()
+                FacilityMapView(
+                    trackedSites: viewModel.filteredTrackedSites,
+                    selectedTrackedSite: $viewModel.selectedTrackedSite
+                )
             }
             .tabItem {
                 Label("Fleet Map", systemImage: "map.fill")
@@ -968,6 +1186,12 @@ struct SupervisorCompactView: View {
         .tint(Color.brandNavy)
         .task {
             await viewModel.loadSupervisorData()
+        }
+        .task(id: selectedTab) {
+            await viewModel.loadSupervisorData()
+        }
+        .sheet(isPresented: $showNewDispatchSheet) {
+            NewDispatchSheet(viewModel: viewModel)
         }
     }
 }

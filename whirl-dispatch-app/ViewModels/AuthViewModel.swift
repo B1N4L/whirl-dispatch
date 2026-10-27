@@ -16,6 +16,7 @@ final class AuthViewModel {
     var isAuthenticated: Bool = false
     var isLoading: Bool = false
     var errorMessage: String? = nil
+    var successMessage: String? = nil
 
     var isBiometricAvailable: Bool = false
     var biometricType: BiometricType = .none
@@ -125,7 +126,7 @@ final class AuthViewModel {
             // fallback minimal technician if cached data missing
             currentUser = User(
                 id: "restored-user",
-                email: savedEmail.isEmpty ? "tech@whirldispatch.com" : savedEmail,
+                email: savedEmail.isEmpty ? "nuwan.tech@whirldispatch.com" : savedEmail,
                 fullName: "Field Technician",
                 phone: "+1 (555) 234-5678",
                 role: .technician,
@@ -139,6 +140,71 @@ final class AuthViewModel {
 
         isLoading = false
         return true
+    }
+
+
+    // update user profile attributes against backend
+    func updateProfile(fullName: String?, email: String?, phone: String?) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        successMessage = nil
+
+        do {
+            let response: AuthResponse = try await apiService.send(
+                .updateProfile(fullName: fullName, email: email, phone: phone)
+            )
+
+            // refresh stored token and cached user
+            apiService.authToken = response.token
+            keychain.saveToken(response.token)
+            if let updatedEmail = email, !updatedEmail.isEmpty {
+                keychain.saveUserEmail(updatedEmail)
+                savedEmail = updatedEmail
+            }
+
+            if let encoded = try? JSONEncoder().encode(response.user) {
+                UserDefaults.standard.set(encoded, forKey: userDefaultsKey)
+            }
+
+            currentUser = response.user
+            successMessage = "Profile updated successfully."
+            isLoading = false
+            return true
+        } catch let apiErr as APIError {
+            isLoading = false
+            errorMessage = apiErr.localizedDescription
+            return false
+        } catch {
+            isLoading = false
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+
+    // update account password with verification of old credentials
+    func changePassword(currentPassword: String, newPassword: String) async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        successMessage = nil
+
+        do {
+            let response: MessageResponse = try await apiService.send(
+                .changePassword(currentPassword: currentPassword, newPassword: newPassword)
+            )
+
+            successMessage = response.message
+            isLoading = false
+            return true
+        } catch let apiErr as APIError {
+            isLoading = false
+            errorMessage = apiErr.localizedDescription
+            return false
+        } catch {
+            isLoading = false
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
 

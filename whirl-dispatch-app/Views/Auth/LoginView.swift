@@ -92,7 +92,7 @@ struct LoginView: View {
                                         .foregroundColor(Color.accentBlue)
                                         .frame(width: 20)
 
-                                    TextField("tech@whirldispatch.com", text: $email)
+                                    TextField("nuwan.tech@whirldispatch.com", text: $email)
                                         .keyboardType(.emailAddress)
                                         .textInputAutocapitalization(.never)
                                         .autocorrectionDisabled()
@@ -214,10 +214,16 @@ struct LoginView: View {
                                 .foregroundColor(.secondary)
 
                             HStack(spacing: 8) {
-                              roleChip(title: "Tech", email: "tech@whirldispatch.com")
-                              roleChip(title: "Lead", email: "lead@whirldispatch.com")
-                              roleChip(title: "Supervisor", email: "supervisor@whirldispatch.com")
-                              roleChip(title: "Clerk", email: "clerk@whirldispatch.com")
+                                roleChip(title: "Tech", email: "nuwan.tech@whirldispatch.com")
+                                roleChip(title: "Lead", email: "kasun.lead@whirldispatch.com")
+                                roleChip(title: "Supervisor", email: "sarath.supervisor@whirldispatch.com")
+                                roleChip(title: "Clerk", email: "anusha.clerk@whirldispatch.com")
+                            }
+
+                            if !email.isEmpty {
+                                Text("Testing: \(email)")
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.secondary)
                             }
                         }
                         .padding(.top, 10)
@@ -257,6 +263,7 @@ struct LoginView: View {
     // helper chip for quick testing roles
     @ViewBuilder
     private func roleChip(title: String, email: String) -> some View {
+      let isSelected = self.email == email
       Button(action: {
           self.email = email
           self.password = "password123"
@@ -264,15 +271,15 @@ struct LoginView: View {
           Text(title)
               .font(.caption2)
               .fontWeight(.semibold)
-              .foregroundColor(Color.brandNavy)
+              .foregroundColor(isSelected ? .white : Color.brandNavy)
               .padding(.horizontal, 10)
               .padding(.vertical, 6)
               .background(
                   Capsule()
-                      .fill(Color.brandNavy.opacity(0.08))
+                      .fill(isSelected ? Color.brandNavy : Color.brandNavy.opacity(0.08))
               )
       }
-      .accessibilityLabel("Select \(title) test role")
+      .accessibilityLabel("Select \(title) test role: \(email)")
     }
 }
 

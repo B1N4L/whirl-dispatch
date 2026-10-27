@@ -126,3 +126,26 @@ struct AuthResponse: Codable {
     let token: String
     let user: User
 }
+
+struct MessageResponse: Codable {
+    let message: String
+}
+
+struct TechnicianItem: Identifiable, Codable, Equatable, Hashable {
+    let id: String
+    let fullName: String
+    let email: String
+    let phone: String?
+    let role: UserRole
+    let isAvailable: Bool
+    let status: String
+    let activeWorkOrderId: String?
+    let activeWorkOrderNumber: String?
+    let activeWorkOrderTitle: String?
+    let facilityName: String?
+}
+
+struct TechniciansResponse: Codable {
+    let count: Int?
+    let technicians: [TechnicianItem]
+}
