@@ -59,6 +59,7 @@ enum APIEndpoint {
     case updateProfile(fullName: String?, email: String?, phone: String?)
     case changePassword(currentPassword: String, newPassword: String)
     case getTeamTelemetry(workOrderId: String)
+    case sendTelemetry(workOrderId: String, lat: Double, lng: Double, accuracy: Double = 5.0, batteryLevel: Int? = nil)
 
 
     var path: String {
@@ -92,6 +93,7 @@ enum APIEndpoint {
         case .updateProfile: return "/auth/profile"
         case .changePassword: return "/auth/change-password"
         case .getTeamTelemetry(let workOrderId): return "/work-orders/\(workOrderId)/team-telemetry"
+        case .sendTelemetry(let workOrderId, _, _, _, _): return "/work-orders/\(workOrderId)/telemetry"
         }
     }
 
@@ -99,7 +101,7 @@ enum APIEndpoint {
         switch self {
         case .health, .getFacilities, .getFleet, .getFleetTracking, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getExpensesByWorkOrder, .getBillingInvoices, .getInvoice, .getDossier, .getAttendanceHistory, .getCurrentAttendance, .getTechnicians, .getEstimatePreview, .getTeamTelemetry:
             return .get
-        case .login, .clockIn, .clockOut, .pauseBreak, .submitExpense, .generateEstimate, .saveDossier, .createWorkOrder, .changePassword:
+        case .login, .clockIn, .clockOut, .pauseBreak, .submitExpense, .generateEstimate, .saveDossier, .createWorkOrder, .changePassword, .sendTelemetry:
             return .post
         case .updateWorkOrderStatus, .approveExpense, .updateInvoiceStatus, .updateProfile:
             return .patch
@@ -238,6 +240,17 @@ enum APIEndpoint {
               "currentPassword": currentPassword,
               "newPassword": newPassword
           ]
+          request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+      case .sendTelemetry(_, let lat, let lng, let accuracy, let batteryLevel):
+          var body: [String: Any] = [
+              "latitude": lat,
+              "longitude": lng,
+              "accuracyMeters": accuracy
+          ]
+          if let battery = batteryLevel {
+              body["batteryLevel"] = battery
+          }
           request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
       default:

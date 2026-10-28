@@ -14,8 +14,10 @@ struct whirl_dispatch_appApp: App {
 
     init() {
         _ = NotificationService.shared
+        _ = LocationManager.shared
         Task { @MainActor in
             _ = await NotificationService.shared.requestAuthorization()
+            LocationManager.shared.requestAuthorization()
         }
     }
 

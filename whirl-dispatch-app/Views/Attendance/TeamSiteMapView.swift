@@ -139,7 +139,7 @@ struct TeamSiteMapView: View {
                     // Refresh Button
                     Button(action: {
                         Task {
-                            await loadTelemetry()
+                            await loadTelemetry(isInitial: false)
                         }
                     }) {
                         Image(systemName: "arrow.clockwise")
@@ -148,7 +148,13 @@ struct TeamSiteMapView: View {
                 }
             }
             .task {
-                await loadTelemetry()
+                await loadTelemetry(isInitial: true)
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 15_000_000_000)
+                    if !Task.isCancelled {
+                        await loadTelemetry(isInitial: false)
+                    }
+                }
             }
         }
     }
@@ -306,10 +312,21 @@ struct TeamSiteMapView: View {
                 }
             }
 
-            HStack {
+            HStack(spacing: 6) {
                 Text(member.isInsideGeofence ? "Inside (\(member.formattedDistance))" : "\(member.formattedDistance) away")
                     .font(.caption2)
                     .foregroundColor(.secondary)
+
+                if let battery = member.batteryLevel {
+                    HStack(spacing: 2) {
+                        Image(systemName: batteryIcon(for: battery))
+                            .font(.system(size: 9))
+                            .foregroundColor(batteryColor(for: battery))
+                        Text("\(battery)%")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    }
+                }
 
                 Spacer()
 
@@ -333,7 +350,7 @@ struct TeamSiteMapView: View {
             }
         }
         .padding(10)
-        .frame(width: 210)
+        .frame(width: 220)
         .background(Color(UIColor.tertiarySystemBackground))
         .cornerRadius(10)
         .overlay(
@@ -354,32 +371,58 @@ struct TeamSiteMapView: View {
         }
     }
 
+    private func batteryIcon(for level: Int) -> String {
+        if level >= 80 { return "battery.100" }
+        if level >= 50 { return "battery.75" }
+        if level >= 25 { return "battery.25" }
+        return "battery.0"
+    }
+
+    private func batteryColor(for level: Int) -> Color {
+        if level <= 15 { return Color.statusRed }
+        if level <= 30 { return Color.statusAmber }
+        return Color.statusGreen
+    }
+
     // MARK: - Telemetry Fetch
 
-    private func loadTelemetry() async {
-        isLoading = true
-        errorMessage = nil
+    private func loadTelemetry(isInitial: Bool = false) async {
+        if isInitial {
+            isLoading = true
+            errorMessage = nil
+        }
 
         do {
             let res: TeamSiteTelemetryResponse = try await apiService.send(.getTeamTelemetry(workOrderId: workOrderId))
             telemetry = res
 
-            // Center camera to encompass facility and its geofence
-            let radiusSpan = max(500, res.facility.geofenceRadius * 3.5)
-            cameraPosition = .region(
-                MKCoordinateRegion(
-                    center: res.facility.coordinate,
-                    latitudinalMeters: radiusSpan,
-                    longitudinalMeters: radiusSpan
+            // Keep selectedMember up to date if one is selected
+            if let selectedId = selectedMember?.id {
+                selectedMember = res.team.first(where: { $0.id == selectedId })
+            }
+
+            // Center camera to encompass facility and its geofence only on initial fetch
+            if isInitial {
+                let radiusSpan = max(500, res.facility.geofenceRadius * 3.5)
+                cameraPosition = .region(
+                    MKCoordinateRegion(
+                        center: res.facility.coordinate,
+                        latitudinalMeters: radiusSpan,
+                        longitudinalMeters: radiusSpan
+                    )
                 )
-            )
+            }
             isLoading = false
         } catch let apiErr as APIError {
-            isLoading = false
-            errorMessage = apiErr.localizedDescription
+            if isInitial {
+                isLoading = false
+                errorMessage = apiErr.localizedDescription
+            }
         } catch {
-            isLoading = false
-            errorMessage = error.localizedDescription
+            if isInitial {
+                isLoading = false
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }

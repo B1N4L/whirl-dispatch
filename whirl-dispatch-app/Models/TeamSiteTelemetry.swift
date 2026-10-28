@@ -23,6 +23,7 @@ struct TeamMemberTelemetry: Identifiable, Codable, Equatable, Hashable {
     let isInsideGeofence: Bool
     let distanceToFacilityMeters: Double
     let formattedDistance: String
+    let batteryLevel: Int?
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -79,3 +80,23 @@ struct TeamSiteTelemetryResponse: Codable, Equatable {
     let clockedInCount: Int
     let insideGeofenceCount: Int
 }
+
+struct RecordTelemetryPayload: Codable, Equatable {
+    let id: String
+    let technicianId: String
+    let workOrderId: String
+    let latitude: Double
+    let longitude: Double
+    let accuracyMeters: Double
+    let batteryLevel: Int?
+    let distanceMeters: Double
+    let isInsideGeofence: Bool
+    let recordedTimestamp: String
+}
+
+struct RecordTelemetryResponse: Codable, Equatable {
+    let status: String
+    let message: String
+    let telemetry: RecordTelemetryPayload
+}
+

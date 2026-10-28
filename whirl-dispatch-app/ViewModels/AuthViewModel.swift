@@ -210,6 +210,7 @@ final class AuthViewModel {
 
     // clear session and return to login
     func logout() {
+      LocationTelemetryService.shared.stopTracking()
       apiService.authToken = nil
       keychain.clearToken()
       UserDefaults.standard.removeObject(forKey: userDefaultsKey)

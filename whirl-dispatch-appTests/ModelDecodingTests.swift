@@ -727,4 +727,54 @@ struct ModelDecodingTests {
         #expect(decoded.totalBreakSeconds == 1245)
         #expect(decoded.todayTotalHours == 4.8)
     }
+
+    @Test func testRecordTelemetryResponseDecoding() throws {
+        let json = """
+        {
+            "status": "success",
+            "message": "Technician telemetry recorded successfully.",
+            "telemetry": {
+                "id": "audit-uuid-1234",
+                "technicianId": "usr-tech-01",
+                "workOrderId": "wo-test-01",
+                "latitude": 6.9255,
+                "longitude": 79.8601,
+                "accuracyMeters": 4.5,
+                "batteryLevel": 82,
+                "distanceMeters": 45.2,
+                "isInsideGeofence": true,
+                "recordedTimestamp": "2026-10-28T14:15:00.000Z"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder().decode(RecordTelemetryResponse.self, from: json)
+        #expect(response.status == "success")
+        #expect(response.telemetry.technicianId == "usr-tech-01")
+        #expect(response.telemetry.batteryLevel == 82)
+        #expect(response.telemetry.isInsideGeofence == true)
+        #expect(response.telemetry.accuracyMeters == 4.5)
+    }
+
+    @Test func testSendTelemetryEndpointRequest() throws {
+        let endpoint = APIEndpoint.sendTelemetry(
+            workOrderId: "wo-test-99",
+            lat: 6.9255,
+            lng: 79.8601,
+            accuracy: 5.0,
+            batteryLevel: 75
+        )
+
+        let request = try endpoint.makeRequest(token: "test-jwt-token")
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.contains("/work-orders/wo-test-99/telemetry") == true)
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-jwt-token")
+
+        let bodyData = try #require(request.httpBody)
+        let bodyJson = try #require(try JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+        #expect(bodyJson["latitude"] as? Double == 6.9255)
+        #expect(bodyJson["longitude"] as? Double == 79.8601)
+        #expect(bodyJson["accuracyMeters"] as? Double == 5.0)
+        #expect(bodyJson["batteryLevel"] as? Int == 75)
+    }
 }

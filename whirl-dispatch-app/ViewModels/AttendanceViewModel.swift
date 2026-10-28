@@ -210,6 +210,11 @@ final class AttendanceViewModel {
         }
 
         _ = evaluateGeofence()
+        if isClockedIn, let woId = currentSession?.workOrderId ?? selectedWorkOrder?.id {
+            LocationTelemetryService.shared.startTracking(workOrderId: woId)
+        } else {
+            LocationTelemetryService.shared.stopTracking()
+        }
         syncWidgetState()
         isLoading = false
     }
@@ -290,6 +295,7 @@ final class AttendanceViewModel {
           self.elapsedSeconds = 0
           self.breakSeconds = 0
           startTimer()
+          LocationTelemetryService.shared.startTracking(workOrderId: order.id)
           syncWidgetState()
           isLoading = false
           return true
@@ -303,6 +309,7 @@ final class AttendanceViewModel {
           self.breakSeconds = 0
           await offlineStorage.upsertAttendance(res.session, isSyncPending: false)
           startTimer()
+          LocationTelemetryService.shared.startTracking(workOrderId: order.id)
           syncWidgetState()
           isLoading = false
           return true
@@ -349,6 +356,7 @@ final class AttendanceViewModel {
             self.elapsedSeconds = 0
             self.breakSeconds = 0
             stopTimer()
+            LocationTelemetryService.shared.stopTracking()
             let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
             let hours = Double(historicalSeconds) / 3600.0
             WidgetSyncManager.shared.syncClockOut(todayTotalHours: hours)
@@ -366,6 +374,7 @@ final class AttendanceViewModel {
             self.elapsedSeconds = 0
             self.breakSeconds = 0
             stopTimer()
+            LocationTelemetryService.shared.stopTracking()
             let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
             let hours = Double(historicalSeconds) / 3600.0
             WidgetSyncManager.shared.syncClockOut(todayTotalHours: hours)
