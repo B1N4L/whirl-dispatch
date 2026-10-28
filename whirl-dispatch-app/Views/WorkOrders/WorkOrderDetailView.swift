@@ -222,12 +222,12 @@ struct WorkOrderDetailView: View {
                                 .foregroundColor(Color.brandNavy)
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Diagnostic Dossier & Checklist")
+                                Text("Diagnostic Machinery Dossier")
                                     .font(.appHeadline)
                                     .fontWeight(.semibold)
                                     .foregroundColor(.primary)
 
-                                Text("Inspect HVAC pressures, motor amps & diagnostic items")
+                                Text("Record HVAC pressures, motor amps & diagnostic photos")
                                     .font(.appCaption)
                                     .foregroundColor(.secondary)
                             }
@@ -247,7 +247,7 @@ struct WorkOrderDetailView: View {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
                                 .stroke(Color.surfaceBorder, lineWidth: 1)
                         )
-                        .accessibilityLabel("Diagnostic Machinery Dossier & Checklist")
+                        .accessibilityLabel("Diagnostic Machinery Dossier")
                         .accessibilityHint("Double tap to inspect HVAC baseline metrics and capture damage photos.")
                     }
                 }

@@ -51,10 +51,7 @@ struct DiagnosticDossierView: View {
                     // 3. before and after proof comparison preview
                     beforeAfterComparisonCard
 
-                    // 4. diagnostic inspection checklist
-                    inspectionChecklistSection
-
-                    // 5. photo proofs & evidence
+                    // 4. photo proofs & evidence
                     photoEvidenceSection
 
                     // 6. technician diagnostic notes
@@ -365,87 +362,6 @@ struct DiagnosticDossierView: View {
         .padding(14)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .cornerRadius(12)
-    }
-
-
-    private var inspectionChecklistSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("Machinery Diagnostic Checklist", systemImage: "checklist")
-                    .font(.appHeadline)
-                    .foregroundColor(Color.brandNavy)
-
-                Spacer()
-
-                Text("\(viewModel.completedChecklistCount) / \(viewModel.totalChecklistCount)")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundColor(viewModel.checklistProgress == 1.0 ? Color.statusGreen : Color.brandNavy)
-            }
-
-            // progress bar
-            ProgressView(value: viewModel.checklistProgress)
-                .tint(viewModel.checklistProgress == 1.0 ? Color.statusGreen : Color.brandNavy)
-
-            Divider()
-
-            ForEach(ChecklistCategory.allCases) { cat in
-                let items = viewModel.checklistItems.filter { $0.category == cat }
-                if !items.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) {
-                            Image(systemName: cat.iconName)
-                                .font(.system(size: 12))
-                                .foregroundColor(Color.brandNavy)
-                            Text(cat.title)
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(Color.brandNavy)
-                        }
-                        .padding(.top, 4)
-
-                        ForEach(items) { item in
-                            checklistItemRow(item)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(14)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .cornerRadius(12)
-    }
-
-    private func checklistItemRow(_ item: DossierChecklistItem) -> some View {
-        Button(action: {
-            viewModel.toggleChecklistItem(id: item.id)
-        }) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: item.isChecked ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 18))
-                    .foregroundColor(item.isChecked ? Color.statusGreen : Color.secondary)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.itemLabel)
-                        .font(.system(size: 13))
-                        .foregroundColor(item.isChecked ? .secondary : .primary)
-                        .strikethrough(item.isChecked, color: .secondary)
-
-                    if let notes = item.notes {
-                        Text(notes)
-                            .font(.caption2)
-                            .foregroundColor(Color.statusGreen)
-                    }
-                }
-
-                Spacer()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(.vertical, 3)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.itemLabel)")
-        .accessibilityValue(item.isChecked ? "Completed" : "Incomplete")
-        .accessibilityAddTraits(item.isChecked ? [.isButton, .isSelected] : .isButton)
     }
 
 

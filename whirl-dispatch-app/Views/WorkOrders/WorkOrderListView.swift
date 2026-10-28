@@ -69,18 +69,21 @@ struct WorkOrderListView: View {
                 // 1. Shift pulse & greeting header
                 greetingCard
 
-                // 2. Current Active Dispatch (Hero Card)
+                // 2. Operational metrics tiles row
+                operationalMetricsRow
+
+                // 3. Current Active Dispatch (Hero Card)
                 currentDispatchSection
 
-                // 3. Quick Action Tools Hub
+                // 4. Quick Action Tools Hub
                 quickActionsSection
 
-                // 4. Upcoming Dispatches (if any)
+                // 5. Upcoming Dispatches (if any)
                 if !viewModel.upcomingDispatches.isEmpty {
                     upcomingDispatchesSection
                 }
 
-                // 5. Completed Dispatch History (participated)
+                // 6. Completed Dispatch History (participated)
                 completedHistorySection
             }
             .padding(.horizontal, 16)
@@ -207,6 +210,83 @@ struct WorkOrderListView: View {
         return "STANDBY"
     }
 
+    // 3 unclickable horizontal operational metric tiles
+    private var operationalMetricsRow: some View {
+        HStack(spacing: 10) {
+            metricTile(
+                icon: "clock.fill",
+                iconColor: Color.brandNavy,
+                value: todayHoursText,
+                title: "TODAY'S SHIFT"
+            )
+
+            metricTile(
+                icon: "person.badge.shield.checkmark.fill",
+                iconColor: dutyStatusColor,
+                value: dutyStatusText,
+                title: "DUTY STATUS"
+            )
+
+            metricTile(
+                icon: "bolt.shield.fill",
+                iconColor: prioritySlaColor,
+                value: prioritySlaText,
+                title: "PRIORITY SLA"
+            )
+        }
+    }
+
+    private func metricTile(icon: String, iconColor: Color, value: String, title: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(iconColor)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Text(title)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .tracking(0.5)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.cardBackground)
+                .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.surfaceBorder.opacity(0.6), lineWidth: 1)
+        )
+    }
+
+    private var todayHoursText: String {
+        ShiftWidgetSnapshot.load().formattedTodayHours
+    }
+
+    private var prioritySlaText: String {
+        if let order = viewModel.currentDispatch {
+            return order.isEmergency ? "2h Emergency" : order.priority.title
+        }
+        return "Standby"
+    }
+
+    private var prioritySlaColor: Color {
+        if let order = viewModel.currentDispatch {
+            return order.isEmergency ? Color.statusRed : Color.brandNavy
+        }
+        return Color(hex: "607D8B")
+    }
+
     // current active dispatch section
     private var currentDispatchSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -270,21 +350,6 @@ struct WorkOrderListView: View {
                             .cornerRadius(8)
                         }
                     }
-
-                    NavigationLink(destination: WorkOrderDetailView(order: order, viewModel: viewModel)) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "checklist")
-                                .font(.caption.bold())
-                            Text("Dossier")
-                                .font(.caption.bold())
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color.brandNavy.opacity(0.12))
-                        .foregroundColor(Color.brandNavy)
-                        .cornerRadius(8)
-                    }
-                    .buttonStyle(.plain)
                 }
             } else {
                 // Standby Card
