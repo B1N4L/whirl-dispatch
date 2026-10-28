@@ -164,24 +164,6 @@ struct whirl_dispatch_appTests {
             facility: nil
         )
 
-        let upcomingJob = WorkOrder(
-            id: "wo-upcoming",
-            workOrderNumber: "WO-2026-002",
-            clientFacilityId: "fac-2",
-            supervisorId: "sup-1",
-            leadTechnicianId: "lead-1",
-            assignedFleetAssetId: nil,
-            title: "Routine Chiller Filter Replacement",
-            description: "Quarterly filter maintenance",
-            priority: .medium,
-            status: .dispatched,
-            scheduledStartTime: "2026-10-29T14:00:00Z",
-            scheduledEndTime: "2026-10-29T16:00:00Z",
-            actualStartTime: nil,
-            actualEndTime: nil,
-            facility: nil
-        )
-
         let completedJob = WorkOrder(
             id: "wo-completed",
             workOrderNumber: "WO-2026-003",
@@ -202,14 +184,10 @@ struct whirl_dispatch_appTests {
 
         let vm = await WorkOrdersViewModel()
         await MainActor.run {
-            vm.workOrders = [activeJob, upcomingJob, completedJob]
+            vm.workOrders = [activeJob, completedJob]
 
-            // Current dispatch must be active job
+            // Current dispatch must be active job (single active dispatch model)
             #expect(vm.currentDispatch?.id == "wo-active")
-
-            // Upcoming dispatches must contain the other dispatched job
-            #expect(vm.upcomingDispatches.count == 1)
-            #expect(vm.upcomingDispatches.first?.id == "wo-upcoming")
 
             // Completed history must contain completed job
             #expect(vm.completedHistory.count == 1)
@@ -220,6 +198,53 @@ struct whirl_dispatch_appTests {
             #expect(vm.isSearching == true)
             #expect(vm.searchResults.count == 1)
             #expect(vm.searchResults.first?.id == "wo-active")
+        }
+    }
+
+    @Test func testCompletedHistoryPagination() async throws {
+        // Create 7 completed jobs to verify 5-cards-per-page pagination
+        var sampleJobs: [WorkOrder] = []
+        for index in 1...7 {
+            sampleJobs.append(
+                WorkOrder(
+                    id: "wo-\(index)",
+                    workOrderNumber: "WO-2026-00\(index)",
+                    clientFacilityId: "fac-1",
+                    supervisorId: "sup-1",
+                    leadTechnicianId: "lead-1",
+                    assignedFleetAssetId: nil,
+                    title: "Completed Maintenance Job \(index)",
+                    description: "Task summary for job \(index)",
+                    priority: .medium,
+                    status: .completed,
+                    scheduledStartTime: "2026-10-2\(index)T08:00:00Z",
+                    scheduledEndTime: "2026-10-2\(index)T12:00:00Z",
+                    actualStartTime: "2026-10-2\(index)T08:15:00Z",
+                    actualEndTime: "2026-10-2\(index)T11:45:00Z",
+                    facility: nil
+                )
+            )
+        }
+
+        let vm = await WorkOrdersViewModel()
+        await MainActor.run {
+            vm.workOrders = sampleJobs
+
+            #expect(vm.completedHistory.count == 7)
+            #expect(vm.totalHistoryPages(pageSize: 5) == 2)
+
+            let page1 = vm.paginatedHistory(page: 1, pageSize: 5)
+            #expect(page1.count == 5)
+            #expect(page1.first?.id == "wo-1")
+            #expect(page1.last?.id == "wo-5")
+
+            let page2 = vm.paginatedHistory(page: 2, pageSize: 5)
+            #expect(page2.count == 2)
+            #expect(page2.first?.id == "wo-6")
+            #expect(page2.last?.id == "wo-7")
+
+            let page3 = vm.paginatedHistory(page: 3, pageSize: 5)
+            #expect(page3.isEmpty)
         }
     }
 }

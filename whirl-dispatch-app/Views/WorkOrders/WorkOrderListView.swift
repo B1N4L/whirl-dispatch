@@ -16,14 +16,11 @@ struct WorkOrderListView: View {
     private let historyPageSize = 5
 
     private var totalHistoryPages: Int {
-        max(1, Int(ceil(Double(viewModel.completedHistory.count) / Double(historyPageSize))))
+        viewModel.totalHistoryPages(pageSize: historyPageSize)
     }
 
     private var paginatedHistory: [WorkOrder] {
-        let startIndex = (historyPage - 1) * historyPageSize
-        guard startIndex < viewModel.completedHistory.count else { return [] }
-        let endIndex = min(startIndex + historyPageSize, viewModel.completedHistory.count)
-        return Array(viewModel.completedHistory[startIndex..<endIndex])
+        viewModel.paginatedHistory(page: historyPage, pageSize: historyPageSize)
     }
 
     private var greeting: String {

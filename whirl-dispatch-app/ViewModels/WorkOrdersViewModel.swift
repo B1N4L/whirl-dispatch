@@ -36,7 +36,7 @@ final class WorkOrdersViewModel {
     }
 
 
-    // current active or primary upcoming dispatch for this technician
+    // current active dispatch for this technician (single active dispatch model)
     var currentDispatch: WorkOrder? {
         // 1. check for currently active on-site or en-route job
         if let active = workOrders.first(where: {
@@ -48,17 +48,22 @@ final class WorkOrdersViewModel {
         return workOrders.first(where: { $0.status == .dispatched })
     }
 
-    // upcoming dispatched jobs beyond the current one
-    var upcomingDispatches: [WorkOrder] {
-        guard let current = currentDispatch else { return [] }
-        return workOrders.filter { order in
-            order.id != current.id && order.status == .dispatched
-        }
-    }
-
     // completed work orders that the technician participated in
     var completedHistory: [WorkOrder] {
         workOrders.filter { $0.status == .completed || $0.status == .billed }
+    }
+
+    // total history pages for completed dispatch history pagination
+    func totalHistoryPages(pageSize: Int = 5) -> Int {
+        max(1, Int(ceil(Double(completedHistory.count) / Double(pageSize))))
+    }
+
+    // slice of completed work orders for the given 1-based page index
+    func paginatedHistory(page: Int, pageSize: Int = 5) -> [WorkOrder] {
+        let startIndex = (page - 1) * pageSize
+        guard startIndex < completedHistory.count else { return [] }
+        let endIndex = min(startIndex + pageSize, completedHistory.count)
+        return Array(completedHistory[startIndex..<endIndex])
     }
 
     // whether a search query is active
