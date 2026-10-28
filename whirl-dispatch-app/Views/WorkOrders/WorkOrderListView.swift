@@ -12,6 +12,19 @@ struct WorkOrderListView: View {
     var authVM: AuthViewModel? = nil
     @State private var viewModel = WorkOrdersViewModel()
     @State private var offlineManager = OfflineModeManager.shared
+    @State private var historyPage: Int = 1
+    private let historyPageSize = 5
+
+    private var totalHistoryPages: Int {
+        max(1, Int(ceil(Double(viewModel.completedHistory.count) / Double(historyPageSize))))
+    }
+
+    private var paginatedHistory: [WorkOrder] {
+        let startIndex = (historyPage - 1) * historyPageSize
+        guard startIndex < viewModel.completedHistory.count else { return [] }
+        let endIndex = min(startIndex + historyPageSize, viewModel.completedHistory.count)
+        return Array(viewModel.completedHistory[startIndex..<endIndex])
+    }
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -78,12 +91,7 @@ struct WorkOrderListView: View {
                 // 4. Quick Action Tools Hub
                 quickActionsSection
 
-                // 5. Upcoming Dispatches (if any)
-                if !viewModel.upcomingDispatches.isEmpty {
-                    upcomingDispatchesSection
-                }
-
-                // 6. Completed Dispatch History (participated)
+                // 5. Completed Dispatch History (participated)
                 completedHistorySection
             }
             .padding(.horizontal, 16)
@@ -91,6 +99,11 @@ struct WorkOrderListView: View {
         }
         .refreshable {
             await viewModel.loadWorkOrders()
+        }
+        .onChange(of: viewModel.completedHistory.count) { _, _ in
+            if historyPage > totalHistoryPages {
+                historyPage = totalHistoryPages
+            }
         }
     }
 
@@ -624,32 +637,7 @@ struct WorkOrderListView: View {
         .opacity(isEnabled ? 1.0 : 0.6)
     }
 
-    // upcoming dispatches section
-    private var upcomingDispatchesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Upcoming Schedule")
-                    .font(.appSubheadline)
-                    .fontWeight(.bold)
-                    .foregroundColor(.secondary)
-
-                Spacer()
-
-                Text("\(viewModel.upcomingDispatches.count) pending")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            ForEach(viewModel.upcomingDispatches) { order in
-                NavigationLink(destination: WorkOrderDetailView(order: order, viewModel: viewModel)) {
-                    WorkOrderCardView(order: order)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    // completed dispatch history section
+    // completed dispatch history section with pagination (5 cards per page)
     private var completedHistorySection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -692,11 +680,67 @@ struct WorkOrderListView: View {
                         .stroke(Color.surfaceBorder, lineWidth: 1)
                 )
             } else {
-                ForEach(viewModel.completedHistory) { order in
+                ForEach(paginatedHistory) { order in
                     NavigationLink(destination: WorkOrderDetailView(order: order, viewModel: viewModel)) {
                         WorkOrderCardView(order: order)
                     }
                     .buttonStyle(.plain)
+                }
+
+                // pagination controls (5 cards per page)
+                if totalHistoryPages > 1 {
+                    HStack {
+                        Button(action: {
+                            if historyPage > 1 {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    historyPage -= 1
+                                }
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text("Previous")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(historyPage > 1 ? Color.brandNavy.opacity(0.10) : Color.secondary.opacity(0.08))
+                            .foregroundColor(historyPage > 1 ? Color.brandNavy : Color.secondary.opacity(0.4))
+                            .cornerRadius(8)
+                        }
+                        .disabled(historyPage <= 1)
+
+                        Spacer()
+
+                        Text("Page \(historyPage) of \(totalHistoryPages)")
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.secondary)
+
+                        Spacer()
+
+                        Button(action: {
+                            if historyPage < totalHistoryPages {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    historyPage += 1
+                                }
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Text("Next")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(historyPage < totalHistoryPages ? Color.brandNavy.opacity(0.10) : Color.secondary.opacity(0.08))
+                            .foregroundColor(historyPage < totalHistoryPages ? Color.brandNavy : Color.secondary.opacity(0.4))
+                            .cornerRadius(8)
+                        }
+                        .disabled(historyPage >= totalHistoryPages)
+                    }
+                    .padding(.top, 6)
                 }
             }
         }
