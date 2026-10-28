@@ -6,11 +6,23 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct WorkOrderListView: View {
+    var authVM: AuthViewModel? = nil
     @State private var viewModel = WorkOrdersViewModel()
     @State private var offlineManager = OfflineModeManager.shared
 
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour < 12 {
+            return "Good Morning"
+        } else if hour < 17 {
+            return "Good Afternoon"
+        } else {
+            return "Good Evening"
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -28,63 +40,16 @@ struct WorkOrderListView: View {
                     }
                 }
 
-                // filter chip selection row
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(WorkOrderFilter.allCases) { filter in
-                            FilterChip(
-                                title: filter.rawValue,
-                                count: viewModel.count(for: filter),
-                                isSelected: viewModel.selectedFilter == filter
-                            ) {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    viewModel.selectedFilter = filter
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                }
-                .background(Color(UIColor.systemBackground))
-
-
-                // work order items list or empty state placeholder
                 if viewModel.isLoading && viewModel.workOrders.isEmpty {
                     Spacer()
                     ProgressView("Loading dispatches...")
                         .font(.appSubheadline)
                         .foregroundColor(.secondary)
                     Spacer()
-                } else if viewModel.filteredWorkOrders.isEmpty {
-                    Spacer()
-                    EmptyStateView(
-                        icon: "clipboard",
-                        title: "No Work Orders Found",
-                        message: viewModel.searchQuery.isEmpty ? "No assigned work orders match this category." : "No results for \"\(viewModel.searchQuery)\".",
-                        actionTitle: "Refresh Feed"
-                    ) {
-                        Task {
-                            await viewModel.loadWorkOrders()
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    Spacer()
+                } else if viewModel.isSearching {
+                    searchContent
                 } else {
-                    List {
-                        ForEach(viewModel.filteredWorkOrders) { order in
-                            NavigationLink(destination: WorkOrderDetailView(order: order, viewModel: viewModel)) {
-                                WorkOrderCardView(order: order)
-                            }
-                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                        }
-                    }
-                    .listStyle(.plain)
-                    .refreshable {
-                        await viewModel.loadWorkOrders()
-                    }
+                    dashboardContent
                 }
             }
             .navigationTitle("Dispatches")
@@ -95,5 +60,658 @@ struct WorkOrderListView: View {
                 }
             }
         }
+    }
+
+    // main dashboard content
+    private var dashboardContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // 1. Shift pulse & greeting header
+                greetingCard
+
+                // 2. Current Active Dispatch (Hero Card)
+                currentDispatchSection
+
+                // 3. Quick Action Tools Hub
+                quickActionsSection
+
+                // 4. Upcoming Dispatches (if any)
+                if !viewModel.upcomingDispatches.isEmpty {
+                    upcomingDispatchesSection
+                }
+
+                // 5. Completed Dispatch History (participated)
+                completedHistorySection
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .refreshable {
+            await viewModel.loadWorkOrders()
+        }
+    }
+
+    // greeting and pulse summary card
+    private var greetingCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(greeting), \(authVM?.currentUser?.fullName ?? "Field Technician")")
+                        .font(.appHeadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+
+                    Text("Commercial Field Operations")
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                // Duty status pill
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(dutyStatusColor)
+                        .frame(width: 8, height: 8)
+
+                    Text(dutyStatusText)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(dutyStatusColor)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(dutyStatusColor.opacity(0.12))
+                .clipShape(Capsule())
+            }
+
+            // Quick status summary row
+            HStack(spacing: 12) {
+                HStack(spacing: 4) {
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                        .font(.caption2)
+                        .foregroundColor(Color.brandNavy)
+                    Text(viewModel.currentDispatch != nil ? "1 Active Dispatch" : "0 Active Dispatches")
+                        .font(.appCaption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                }
+
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(Color.statusGreen)
+                    Text("\(viewModel.completedHistory.count) Completed")
+                        .font(.appCaption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Image(systemName: offlineManager.isPlantRoomOffline ? "antenna.radiowaves.left.and.right.slash" : "icloud.fill")
+                        .font(.caption2)
+                        .foregroundColor(offlineManager.isPlantRoomOffline ? Color.statusAmber : Color.accentBlue)
+                    Text(offlineManager.isPlantRoomOffline ? "Offline" : "Synced")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(offlineManager.isPlantRoomOffline ? Color.statusAmber : Color.secondary)
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.cardBackground)
+                .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.surfaceBorder.opacity(0.6), lineWidth: 1)
+        )
+    }
+
+    private var dutyStatusColor: Color {
+        if let order = viewModel.currentDispatch {
+            switch order.status {
+            case .onSiteActive:
+                return Color.statusGreen
+            case .enRoute:
+                return Color.accentBlue
+            case .unacknowledgedBreak, .awaitingPartsApproval:
+                return Color.statusAmber
+            default:
+                return Color.brandNavy
+            }
+        }
+        return Color(hex: "607D8B")
+    }
+
+    private var dutyStatusText: String {
+        if let order = viewModel.currentDispatch {
+            switch order.status {
+            case .onSiteActive:
+                return "ON SITE"
+            case .enRoute:
+                return "EN ROUTE"
+            case .unacknowledgedBreak:
+                return "ON BREAK"
+            case .awaitingPartsApproval:
+                return "AWAITING PARTS"
+            case .dispatched:
+                return "ASSIGNED"
+            default:
+                return order.status.label.uppercased()
+            }
+        }
+        return "STANDBY"
+    }
+
+    // current active dispatch section
+    private var currentDispatchSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Current Active Dispatch")
+                    .font(.appSubheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                if viewModel.currentDispatch != nil {
+                    Text("TAP CARD FOR DETAILS")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(Color.accentBlue)
+                        .tracking(0.5)
+                }
+            }
+
+            if let order = viewModel.currentDispatch {
+                // Hero Active Dispatch Card
+                NavigationLink(destination: WorkOrderDetailView(order: order, viewModel: viewModel)) {
+                    heroDispatchCard(for: order)
+                }
+                .buttonStyle(.plain)
+
+                // Inline quick action shortcuts for this dispatch
+                HStack(spacing: 10) {
+                    if let fac = order.facility {
+                        Button(action: {
+                            openMaps(facility: fac)
+                        }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "location.fill")
+                                    .font(.caption.bold())
+                                Text("Directions")
+                                    .font(.caption.bold())
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.accentBlue.opacity(0.12))
+                            .foregroundColor(Color.accentBlue)
+                            .cornerRadius(8)
+                        }
+                    }
+
+                    if let phone = order.facility?.contactPhone, !phone.isEmpty {
+                        Button(action: {
+                            dialPhone(phone)
+                        }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "phone.fill")
+                                    .font(.caption.bold())
+                                Text("Call Site")
+                                    .font(.caption.bold())
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Color.statusGreen.opacity(0.12))
+                            .foregroundColor(Color.statusGreen)
+                            .cornerRadius(8)
+                        }
+                    }
+
+                    NavigationLink(destination: WorkOrderDetailView(order: order, viewModel: viewModel)) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "checklist")
+                                .font(.caption.bold())
+                            Text("Dossier")
+                                .font(.caption.bold())
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color.brandNavy.opacity(0.12))
+                        .foregroundColor(Color.brandNavy)
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                // Standby Card
+                standbyHeroCard
+            }
+        }
+    }
+
+    private func heroDispatchCard(for order: WorkOrder) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header Row: order number, priority & status
+            HStack(alignment: .center) {
+                HStack(spacing: 6) {
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Color.brandNavy)
+
+                    Text(order.workOrderNumber)
+                        .font(.appMonoHeadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(Color.brandNavy)
+                }
+
+                Spacer()
+
+                PriorityBadge(priority: order.priority.toPriorityLevel)
+                StatusBadge(status: order.status.toStatusType)
+            }
+
+            // Title
+            Text(order.title)
+                .font(.appHeadline)
+                .fontWeight(.bold)
+                .foregroundColor(.primary)
+                .lineLimit(2)
+
+            // Description
+            if !order.description.isEmpty {
+                Text(order.description)
+                    .font(.appCaption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+
+            // Facility & Address
+            if let facility = order.facility {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "building.2.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color.accentBlue)
+
+                        Text(facility.displayName)
+                            .font(.appSubheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                    }
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+
+                        Text(facility.address)
+                            .font(.appCaption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            Divider()
+                .padding(.vertical, 2)
+
+            // Footer with time & tap prompt
+            HStack {
+                HStack(spacing: 5) {
+                    Image(systemName: "calendar")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+
+                    Text(formatScheduledTime(order.scheduledStartTime))
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+                }
+
+                if order.isEmergency {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.badge.exclamationmark")
+                            .font(.caption2)
+                            .foregroundColor(Color.statusRed)
+                        Text("Emergency SLA")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(Color.statusRed)
+                    }
+                    .padding(.leading, 8)
+                }
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Text("View Dispatch")
+                        .font(.caption.bold())
+                        .foregroundColor(Color.brandNavy)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundColor(Color.brandNavy)
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.cardBackground)
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(order.isEmergency ? Color.statusRed.opacity(0.4) : Color.brandNavy.opacity(0.3), lineWidth: order.isEmergency ? 1.5 : 1)
+        )
+    }
+
+    private var standbyHeroCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: "607D8B").opacity(0.12))
+                        .frame(width: 44, height: 44)
+
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 20))
+                        .foregroundColor(Color(hex: "455A64"))
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("No Active Dispatches Scheduled")
+                        .font(.appHeadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+
+                    Text("You are currently on standby for dispatch assignments.")
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+
+            HStack {
+                Text("Any jobs assigned by your supervisor will appear here.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Button(action: {
+                    Task {
+                        await viewModel.loadWorkOrders()
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption2.bold())
+                        Text("Refresh")
+                            .font(.caption2.bold())
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.brandNavy.opacity(0.10))
+                    .foregroundColor(Color.brandNavy)
+                    .cornerRadius(6)
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.surfaceBorder, lineWidth: 1)
+        )
+    }
+
+    // quick actions section
+    private var quickActionsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Quick Tools")
+                .font(.appSubheadline)
+                .fontWeight(.bold)
+                .foregroundColor(.secondary)
+
+            HStack(spacing: 12) {
+                // 1. Site Navigation
+                Button(action: {
+                    if let fac = viewModel.currentDispatch?.facility {
+                        openMaps(facility: fac)
+                    }
+                }) {
+                    quickActionTile(
+                        icon: "location.north.circle.fill",
+                        title: "Navigation",
+                        subtitle: viewModel.currentDispatch?.facility != nil ? "Apple Maps" : "No site",
+                        isEnabled: viewModel.currentDispatch?.facility != nil
+                    )
+                }
+                .disabled(viewModel.currentDispatch?.facility == nil)
+
+                // 2. Call Contact
+                Button(action: {
+                    if let phone = viewModel.currentDispatch?.facility?.contactPhone, !phone.isEmpty {
+                        dialPhone(phone)
+                    }
+                }) {
+                    quickActionTile(
+                        icon: "phone.circle.fill",
+                        title: "Site Contact",
+                        subtitle: viewModel.currentDispatch?.facility?.contactPersonName ?? "Unassigned",
+                        isEnabled: !(viewModel.currentDispatch?.facility?.contactPhone ?? "").isEmpty
+                    )
+                }
+                .disabled((viewModel.currentDispatch?.facility?.contactPhone ?? "").isEmpty)
+
+                // 3. Refresh Schedule
+                Button(action: {
+                    Task {
+                        await viewModel.loadWorkOrders()
+                    }
+                }) {
+                    quickActionTile(
+                        icon: "arrow.clockwise.circle.fill",
+                        title: "Refresh",
+                        subtitle: "Sync latest",
+                        isEnabled: true
+                    )
+                }
+            }
+        }
+    }
+
+    private func quickActionTile(icon: String, title: String, subtitle: String, isEnabled: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 22))
+                .foregroundColor(isEnabled ? Color.brandNavy : Color.secondary.opacity(0.4))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(isEnabled ? .primary : .secondary)
+
+                Text(subtitle)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.surfaceBorder.opacity(0.7), lineWidth: 1)
+        )
+        .opacity(isEnabled ? 1.0 : 0.6)
+    }
+
+    // upcoming dispatches section
+    private var upcomingDispatchesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Upcoming Schedule")
+                    .font(.appSubheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Text("\(viewModel.upcomingDispatches.count) pending")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            ForEach(viewModel.upcomingDispatches) { order in
+                NavigationLink(destination: WorkOrderDetailView(order: order, viewModel: viewModel)) {
+                    WorkOrderCardView(order: order)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // completed dispatch history section
+    private var completedHistorySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Completed Dispatch History")
+                    .font(.appSubheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Text("\(viewModel.completedHistory.count) completed")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            if viewModel.completedHistory.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 24))
+                        .foregroundColor(.secondary)
+
+                    Text("No Completed Dispatches Yet")
+                        .font(.appSubheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+
+                    Text("Dispatches you have completed will appear here for historical reference.")
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.cardBackground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.surfaceBorder, lineWidth: 1)
+                )
+            } else {
+                ForEach(viewModel.completedHistory) { order in
+                    NavigationLink(destination: WorkOrderDetailView(order: order, viewModel: viewModel)) {
+                        WorkOrderCardView(order: order)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // search content
+    private var searchContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if viewModel.searchResults.isEmpty {
+                Spacer()
+                EmptyStateView(
+                    icon: "magnifyingglass",
+                    title: "No Results Found",
+                    message: "No dispatches match \"\(viewModel.searchQuery)\".",
+                    actionTitle: "Clear Search"
+                ) {
+                    viewModel.searchQuery = ""
+                }
+                .padding(.horizontal, 24)
+                Spacer()
+            } else {
+                HStack {
+                    Text("Search Results")
+                        .font(.appSubheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Text("\(viewModel.searchResults.count) found")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+
+                List {
+                    ForEach(viewModel.searchResults) { order in
+                        NavigationLink(destination: WorkOrderDetailView(order: order, viewModel: viewModel)) {
+                            WorkOrderCardView(order: order)
+                        }
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                    }
+                }
+                .listStyle(.plain)
+            }
+        }
+    }
+
+    // map launcher
+    private func openMaps(facility: Facility?) {
+        guard let fac = facility else { return }
+        let lat = fac.latitude
+        let lng = fac.longitude
+        let urlString = "maps://?daddr=\(lat),\(lng)&dirflg=d"
+        if let url = URL(string: urlString), UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+        } else if let webUrl = URL(string: "https://maps.apple.com/?daddr=\(lat),\(lng)") {
+            UIApplication.shared.open(webUrl)
+        }
+    }
+
+    // phone dialer
+    private func dialPhone(_ phoneNumber: String?) {
+        guard let raw = phoneNumber else { return }
+        let cleaned = raw.filter("0123456789+".contains)
+        guard !cleaned.isEmpty, let url = URL(string: "tel://\(cleaned)"), UIApplication.shared.canOpenURL(url) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    // scheduled timestamp formatter
+    private func formatScheduledTime(_ isoString: String) -> String {
+        let isoFormatter = ISO8601DateFormatter()
+        if let date = isoFormatter.date(from: isoString) {
+            let displayFormatter = DateFormatter()
+            displayFormatter.dateFormat = "MMM d, h:mm a"
+            return displayFormatter.string(from: date)
+        }
+        return isoString
     }
 }

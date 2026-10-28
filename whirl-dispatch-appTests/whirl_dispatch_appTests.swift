@@ -144,4 +144,82 @@ struct whirl_dispatch_appTests {
         )
         #expect(standbySnapshot.hasAssignedDispatch == false)
     }
+
+    @Test func testWorkOrdersViewModelDashboardCategorization() async throws {
+        let activeJob = WorkOrder(
+            id: "wo-active",
+            workOrderNumber: "WO-2026-001",
+            clientFacilityId: "fac-1",
+            supervisorId: "sup-1",
+            leadTechnicianId: "lead-1",
+            assignedFleetAssetId: nil,
+            title: "Emergency Compressor Repair",
+            description: "High pressure alarm tripped",
+            priority: .criticalEmergency,
+            status: .onSiteActive,
+            scheduledStartTime: "2026-10-29T09:00:00Z",
+            scheduledEndTime: "2026-10-29T12:00:00Z",
+            actualStartTime: nil,
+            actualEndTime: nil,
+            facility: nil
+        )
+
+        let upcomingJob = WorkOrder(
+            id: "wo-upcoming",
+            workOrderNumber: "WO-2026-002",
+            clientFacilityId: "fac-2",
+            supervisorId: "sup-1",
+            leadTechnicianId: "lead-1",
+            assignedFleetAssetId: nil,
+            title: "Routine Chiller Filter Replacement",
+            description: "Quarterly filter maintenance",
+            priority: .medium,
+            status: .dispatched,
+            scheduledStartTime: "2026-10-29T14:00:00Z",
+            scheduledEndTime: "2026-10-29T16:00:00Z",
+            actualStartTime: nil,
+            actualEndTime: nil,
+            facility: nil
+        )
+
+        let completedJob = WorkOrder(
+            id: "wo-completed",
+            workOrderNumber: "WO-2026-003",
+            clientFacilityId: "fac-3",
+            supervisorId: "sup-1",
+            leadTechnicianId: "lead-1",
+            assignedFleetAssetId: nil,
+            title: "Thermostat Calibration",
+            description: "Calibrated plant room sensors",
+            priority: .low,
+            status: .completed,
+            scheduledStartTime: "2026-10-28T10:00:00Z",
+            scheduledEndTime: "2026-10-28T12:00:00Z",
+            actualStartTime: nil,
+            actualEndTime: nil,
+            facility: nil
+        )
+
+        let vm = await WorkOrdersViewModel()
+        await MainActor.run {
+            vm.workOrders = [activeJob, upcomingJob, completedJob]
+
+            // Current dispatch must be active job
+            #expect(vm.currentDispatch?.id == "wo-active")
+
+            // Upcoming dispatches must contain the other dispatched job
+            #expect(vm.upcomingDispatches.count == 1)
+            #expect(vm.upcomingDispatches.first?.id == "wo-upcoming")
+
+            // Completed history must contain completed job
+            #expect(vm.completedHistory.count == 1)
+            #expect(vm.completedHistory.first?.id == "wo-completed")
+
+            // Search query filtering
+            vm.searchQuery = "Compressor"
+            #expect(vm.isSearching == true)
+            #expect(vm.searchResults.count == 1)
+            #expect(vm.searchResults.first?.id == "wo-active")
+        }
+    }
 }

@@ -36,6 +36,50 @@ final class WorkOrdersViewModel {
     }
 
 
+    // current active or primary upcoming dispatch for this technician
+    var currentDispatch: WorkOrder? {
+        // 1. check for currently active on-site or en-route job
+        if let active = workOrders.first(where: {
+            $0.status == .onSiteActive || $0.status == .unacknowledgedBreak || $0.status == .awaitingPartsApproval || $0.status == .enRoute
+        }) {
+            return active
+        }
+        // 2. otherwise, first scheduled dispatched job
+        return workOrders.first(where: { $0.status == .dispatched })
+    }
+
+    // upcoming dispatched jobs beyond the current one
+    var upcomingDispatches: [WorkOrder] {
+        guard let current = currentDispatch else { return [] }
+        return workOrders.filter { order in
+            order.id != current.id && order.status == .dispatched
+        }
+    }
+
+    // completed work orders that the technician participated in
+    var completedHistory: [WorkOrder] {
+        workOrders.filter { $0.status == .completed || $0.status == .billed }
+    }
+
+    // whether a search query is active
+    var isSearching: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // search results matching search query across all dispatches
+    var searchResults: [WorkOrder] {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return [] }
+        return workOrders.filter { order in
+            order.workOrderNumber.lowercased().contains(query) ||
+            order.title.lowercased().contains(query) ||
+            order.description.lowercased().contains(query) ||
+            (order.facility?.facilityName.lowercased().contains(query) ?? false) ||
+            (order.facility?.companyName.lowercased().contains(query) ?? false)
+        }
+    }
+
+
     // computed filtered list matching chips and search box
     var filteredWorkOrders: [WorkOrder] {
       var list = workOrders

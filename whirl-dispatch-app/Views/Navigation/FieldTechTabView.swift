@@ -29,10 +29,10 @@ struct FieldTechTabView: View {
             }
 
             TabView(selection: $selectedTab) {
-                // tab 1: work orders dispatch feed
-                WorkOrderListView()
+                // tab 1: technician dispatch operations dashboard
+                WorkOrderListView(authVM: authVM)
                     .tabItem {
-                        Label("Work Orders", systemImage: "wrench.and.screwdriver.fill")
+                        Label("Dispatches", systemImage: "wrench.and.screwdriver.fill")
                     }
                     .tag(0)
 
