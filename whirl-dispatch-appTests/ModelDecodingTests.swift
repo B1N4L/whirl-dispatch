@@ -689,4 +689,42 @@ struct ModelDecodingTests {
         #expect(site.telemetry.isInsideGeofence == true)
         #expect(site.telemetry.formattedDistance == "15m")
     }
+
+
+    @Test func testShiftWidgetSnapshotEncodingAndDecoding() throws {
+        let now = Date()
+        let clockIn = Calendar.current.date(byAdding: .hour, value: -3, to: now)
+
+        let snapshot = ShiftWidgetSnapshot(
+            isClockedIn: true,
+            isOnBreak: false,
+            clockInDate: clockIn,
+            totalBreakSeconds: 1245,
+            activeWorkOrderNumber: "WO-2026-9042",
+            activeWorkOrderTitle: "Air Handling Unit Filter Replacement",
+            activeFacilityName: "World Trade Center Colombo",
+            todayTotalHours: 4.8,
+            lastUpdated: now
+        )
+
+        #expect(snapshot.isClockedIn == true)
+        #expect(snapshot.isOnBreak == false)
+        #expect(snapshot.formattedBreakTime == "20m 45s")
+        #expect(snapshot.formattedTodayHours == "4.8 hrs")
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(snapshot)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(ShiftWidgetSnapshot.self, from: data)
+
+        #expect(decoded.isClockedIn == true)
+        #expect(decoded.isOnBreak == false)
+        #expect(decoded.activeWorkOrderNumber == "WO-2026-9042")
+        #expect(decoded.activeFacilityName == "World Trade Center Colombo")
+        #expect(decoded.totalBreakSeconds == 1245)
+        #expect(decoded.todayTotalHours == 4.8)
+    }
 }

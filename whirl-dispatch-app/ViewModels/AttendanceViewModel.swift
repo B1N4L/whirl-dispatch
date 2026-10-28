@@ -210,6 +210,7 @@ final class AttendanceViewModel {
         }
 
         _ = evaluateGeofence()
+        syncWidgetState()
         isLoading = false
     }
 
@@ -289,6 +290,7 @@ final class AttendanceViewModel {
           self.elapsedSeconds = 0
           self.breakSeconds = 0
           startTimer()
+          syncWidgetState()
           isLoading = false
           return true
       }
@@ -301,6 +303,7 @@ final class AttendanceViewModel {
           self.breakSeconds = 0
           await offlineStorage.upsertAttendance(res.session, isSyncPending: false)
           startTimer()
+          syncWidgetState()
           isLoading = false
           return true
       } catch let apiErr as APIError {
@@ -346,6 +349,9 @@ final class AttendanceViewModel {
             self.elapsedSeconds = 0
             self.breakSeconds = 0
             stopTimer()
+            let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
+            let hours = Double(historicalSeconds) / 3600.0
+            WidgetSyncManager.shared.syncClockOut(todayTotalHours: hours)
             isLoading = false
             return true
         }
@@ -360,6 +366,9 @@ final class AttendanceViewModel {
             self.elapsedSeconds = 0
             self.breakSeconds = 0
             stopTimer()
+            let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
+            let hours = Double(historicalSeconds) / 3600.0
+            WidgetSyncManager.shared.syncClockOut(todayTotalHours: hours)
             isLoading = false
             return true
         } catch {
@@ -375,6 +384,7 @@ final class AttendanceViewModel {
       guard isClockedIn, let order = selectedWorkOrder else { return }
 
       isOnBreak.toggle()
+      syncWidgetState()
 
       if !offlineManager.isPlantRoomOffline {
           let lat = order.facility?.latitude ?? 6.9175
@@ -385,6 +395,26 @@ final class AttendanceViewModel {
               // ignore break logging network hiccups
           }
       }
+    }
+
+
+    // sync shift state to home screen widget
+    func syncWidgetState() {
+        let clockInDate: Date? = currentSession.flatMap { ISO8601DateFormatter().date(from: $0.clockInTimestamp) }
+        let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
+        let total = historicalSeconds + (isClockedIn ? elapsedSeconds : 0)
+        let hours = Double(total) / 3600.0
+
+        WidgetSyncManager.shared.syncShift(
+            isClockedIn: isClockedIn,
+            isOnBreak: isOnBreak,
+            clockInDate: clockInDate,
+            totalBreakSeconds: breakSeconds,
+            workOrderNumber: selectedWorkOrder?.workOrderNumber,
+            workOrderTitle: selectedWorkOrder?.title,
+            facilityName: selectedWorkOrder?.facility?.facilityName,
+            todayTotalHours: hours
+        )
     }
 
 

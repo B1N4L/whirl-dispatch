@@ -6,6 +6,10 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		84DBA2ED308F00C6001A51DD /* whirl-dispatch-widgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 84DBA2E2308F00C6001A51DD /* whirl-dispatch-widgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		84DBA2C5308F00C5001A51DD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,12 +25,32 @@
 			remoteGlobalIDString = 84DBA2B1308F00C4001A51DD;
 			remoteInfo = "whirl-dispatch-app";
 		};
+		84DBA2EC308F00C6001A51DD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 84DBA2AA308F00C4001A51DD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 84DBA2E1308F00C6001A51DD;
+			remoteInfo = "whirl-dispatch-widgetExtension";
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		84DBA2E7308F00C6001A51DD /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				84DBA2ED308F00C6001A51DD /* whirl-dispatch-widgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		84DBA2B2308F00C4001A51DD /* whirl-dispatch-app.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "whirl-dispatch-app.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		84DBA2C4308F00C5001A51DD /* whirl-dispatch-appTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "whirl-dispatch-appTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		84DBA2CE308F00C5001A51DD /* whirl-dispatch-appUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "whirl-dispatch-appUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		84DBA2E2308F00C6001A51DD /* whirl-dispatch-widgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "whirl-dispatch-widgetExtension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -43,6 +67,11 @@
 		84DBA2D1308F00C5001A51DD /* whirl-dispatch-appUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "whirl-dispatch-appUITests";
+			sourceTree = "<group>";
+		};
+		84DBA2E3308F00C6001A51DD /* whirl-dispatch-widget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "whirl-dispatch-widget";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -63,6 +92,11 @@
 			files = (
 			);
 		};
+		84DBA2E5308F00C6001A51DD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -72,6 +106,7 @@
 				84DBA2B4308F00C4001A51DD /* whirl-dispatch-app */,
 				84DBA2C7308F00C5001A51DD /* whirl-dispatch-appTests */,
 				84DBA2D1308F00C5001A51DD /* whirl-dispatch-appUITests */,
+				84DBA2E3308F00C6001A51DD /* whirl-dispatch-widget */,
 				84DBA2B3308F00C4001A51DD /* Products */,
 			);
 			sourceTree = "<group>";
@@ -82,6 +117,7 @@
 				84DBA2B2308F00C4001A51DD /* whirl-dispatch-app.app */,
 				84DBA2C4308F00C5001A51DD /* whirl-dispatch-appTests.xctest */,
 				84DBA2CE308F00C5001A51DD /* whirl-dispatch-appUITests.xctest */,
+				84DBA2E2308F00C6001A51DD /* whirl-dispatch-widgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -96,8 +132,12 @@
 				84DBA2AE308F00C4001A51DD /* Sources */,
 				84DBA2AF308F00C4001A51DD /* Frameworks */,
 				84DBA2B0308F00C4001A51DD /* Resources */,
+				84DBA2E7308F00C6001A51DD /* Embed Foundation Extensions */,
 			);
 			buildRules = (
+			);
+			dependencies = (
+				84DBA2EB308F00C6001A51DD /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				84DBA2B4308F00C4001A51DD /* whirl-dispatch-app */,
@@ -149,6 +189,24 @@
 			productReference = 84DBA2CE308F00C5001A51DD /* whirl-dispatch-appUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		84DBA2E1308F00C6001A51DD /* whirl-dispatch-widgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 84DBA2E8308F00C6001A51DD /* Build configuration list for PBXNativeTarget "whirl-dispatch-widgetExtension" */;
+			buildPhases = (
+				84DBA2E4308F00C6001A51DD /* Sources */,
+				84DBA2E5308F00C6001A51DD /* Frameworks */,
+				84DBA2E6308F00C6001A51DD /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				84DBA2E3308F00C6001A51DD /* whirl-dispatch-widget */,
+			);
+			name = "whirl-dispatch-widgetExtension";
+			productName = "whirl-dispatch-widgetExtension";
+			productReference = 84DBA2E2308F00C6001A51DD /* whirl-dispatch-widgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -170,6 +228,9 @@
 						CreatedOnToolsVersion = 27.1;
 						TestTargetID = 84DBA2B1308F00C4001A51DD;
 					};
+					84DBA2E1308F00C6001A51DD = {
+						CreatedOnToolsVersion = 27.1;
+					};
 				};
 			};
 			buildConfigurationList = 84DBA2AD308F00C4001A51DD /* Build configuration list for PBXProject "whirl-dispatch-app" */;
@@ -187,6 +248,7 @@
 			projectRoot = "";
 			targets = (
 				84DBA2B1308F00C4001A51DD /* whirl-dispatch-app */,
+				84DBA2E1308F00C6001A51DD /* whirl-dispatch-widgetExtension */,
 				84DBA2C3308F00C5001A51DD /* whirl-dispatch-appTests */,
 				84DBA2CD308F00C5001A51DD /* whirl-dispatch-appUITests */,
 			);
@@ -209,6 +271,11 @@
 			files = (
 			);
 		};
+		84DBA2E6308F00C6001A51DD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -227,6 +294,11 @@
 			files = (
 			);
 		};
+		84DBA2E4308F00C6001A51DD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -239,6 +311,11 @@
 			isa = PBXTargetDependency;
 			target = 84DBA2B1308F00C4001A51DD /* whirl-dispatch-app */;
 			targetProxy = 84DBA2CF308F00C5001A51DD /* PBXContainerItemProxy */;
+		};
+		84DBA2EB308F00C6001A51DD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 84DBA2E1308F00C6001A51DD /* whirl-dispatch-widgetExtension */;
+			targetProxy = 84DBA2EC308F00C6001A51DD /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -516,6 +593,68 @@
 			};
 			name = Release;
 		};
+		84DBA2E9308F00C6001A51DD /* Debug configuration for PBXNativeTarget "whirl-dispatch-widgetExtension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundlePackageType = "XPC!";
+				INFOPLIST_FILE = "whirl-dispatch-widget-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "binal.whirl-dispatch-app.widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		84DBA2EA308F00C6001A51DD /* Release configuration for PBXNativeTarget "whirl-dispatch-widgetExtension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundlePackageType = "XPC!";
+				INFOPLIST_FILE = "whirl-dispatch-widget-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "binal.whirl-dispatch-app.widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -548,6 +687,14 @@
 			buildConfigurations = (
 				84DBA2DD308F00C5001A51DD /* Debug configuration for PBXNativeTarget "whirl-dispatch-appUITests" */,
 				84DBA2DE308F00C5001A51DD /* Release configuration for PBXNativeTarget "whirl-dispatch-appUITests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		84DBA2E8308F00C6001A51DD /* Build configuration list for PBXNativeTarget "whirl-dispatch-widgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				84DBA2E9308F00C6001A51DD /* Debug configuration for PBXNativeTarget "whirl-dispatch-widgetExtension" */,
+				84DBA2EA308F00C6001A51DD /* Release configuration for PBXNativeTarget "whirl-dispatch-widgetExtension" */,
 			);
 			defaultConfigurationName = Release;
 		};
