@@ -12,9 +12,9 @@ enum APIError: Error, LocalizedError {
     case networkError(Error)
     case serverError(statusCode: Int, message: String)
     case unauthorized
-    case notFound
+    case notFound(message: String? = nil)
     case decodingError(Error)
-   case unknownError
+    case unknownError
 
     var errorDescription: String? {
         switch self {
@@ -26,8 +26,8 @@ enum APIError: Error, LocalizedError {
             return "Server responded with code \(code): \(msg)"
         case .unauthorized:
             return "Session expired or invalid credentials. Please log in again."
-        case .notFound:
-            return "The requested record was not found on the server."
+        case .notFound(let msg):
+            return msg ?? "The requested record was not found on the server."
         case .decodingError(let err):
             return "Data parsing error: \(err.localizedDescription)"
         case .unknownError:
@@ -64,7 +64,11 @@ final class APIService {
         }
 
         if httpResponse.statusCode == 404 {
-            throw APIError.notFound
+            var notFoundMsg: String? = nil
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                notFoundMsg = json["message"] as? String ?? json["error"] as? String
+            }
+            throw APIError.notFound(message: notFoundMsg)
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {

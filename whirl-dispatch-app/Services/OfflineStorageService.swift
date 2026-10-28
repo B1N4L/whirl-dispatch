@@ -168,12 +168,16 @@ final class OfflineStorageService: @unchecked Sendable {
     }
 
     // fetch any currently active unclosed attendance session across all work orders
-    func fetchActiveCachedAttendance() async -> AttendanceRecord? {
+    func fetchActiveCachedAttendance(technicianId: String? = nil) async -> AttendanceRecord? {
         let context = createBackgroundContext()
 
         return await context.perform {
             let activeReq: NSFetchRequest<CachedAttendance> = NSFetchRequest(entityName: "CachedAttendance")
-            activeReq.predicate = NSPredicate(format: "clockOutTimestamp == nil")
+            if let techId = technicianId, !techId.isEmpty {
+                activeReq.predicate = NSPredicate(format: "technicianId == %@ AND clockOutTimestamp == nil", techId)
+            } else {
+                activeReq.predicate = NSPredicate(format: "clockOutTimestamp == nil")
+            }
             activeReq.sortDescriptors = [NSSortDescriptor(key: "clockInTimestamp", ascending: false)]
             activeReq.fetchLimit = 1
 
@@ -181,6 +185,29 @@ final class OfflineStorageService: @unchecked Sendable {
                 return active.toDomain()
             }
             return nil
+        }
+    }
+
+    // clear or close orphaned active attendance sessions in local Core Data
+    func clearOrphanedActiveAttendance(technicianId: String? = nil) async {
+        let context = createBackgroundContext()
+
+        await context.perform {
+            let activeReq: NSFetchRequest<CachedAttendance> = NSFetchRequest(entityName: "CachedAttendance")
+            if let techId = technicianId, !techId.isEmpty {
+                activeReq.predicate = NSPredicate(format: "technicianId == %@ AND clockOutTimestamp == nil AND isSyncPending == NO", techId)
+            } else {
+                activeReq.predicate = NSPredicate(format: "clockOutTimestamp == nil AND isSyncPending == NO")
+            }
+
+            if let activeSessions = try? context.fetch(activeReq) {
+                let nowStr = ISO8601DateFormatter().string(from: Date())
+                for session in activeSessions {
+                    session.clockOutTimestamp = nowStr
+                    session.sessionStatus = "CLOCKED_OUT"
+                }
+                try? context.save()
+            }
         }
     }
 

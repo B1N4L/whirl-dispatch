@@ -108,11 +108,13 @@ final class AttendanceViewModel {
         }
 
         var activeFound = false
+        var remoteCheckCompleted = false
 
         // 1. Query remote active session if online
         if !offlineManager.isPlantRoomOffline {
             do {
                 let currentRes: CurrentAttendanceResponse = try await apiService.send(.getCurrentAttendance)
+                remoteCheckCompleted = true
                 if currentRes.active, let active = currentRes.session {
                     self.currentSession = active
                     self.isClockedIn = true
@@ -132,14 +134,24 @@ final class AttendanceViewModel {
                     startTimer()
                     activeFound = true
                     await offlineStorage.upsertAttendance(active, isSyncPending: false)
+                } else {
+                    // Cloud returned active == false. Cloud is authoritative when online.
+                    // Clean up any local orphaned non-pending active sessions.
+                    await offlineStorage.clearOrphanedActiveAttendance()
+                    self.currentSession = nil
+                    self.isClockedIn = false
+                    self.isOnBreak = false
+                    self.elapsedSeconds = 0
+                    self.breakSeconds = 0
+                    stopTimer()
                 }
             } catch {
                 // fall through to local cache or timeline
             }
         }
 
-        // 2. Fall back to local Core Data active session if offline or not returned by endpoint
-        if !activeFound {
+        // 2. Fall back to local Core Data active session ONLY if offline or if remote check failed
+        if !activeFound && (!remoteCheckCompleted || offlineManager.isPlantRoomOffline) {
             if let activeCached = await offlineStorage.fetchActiveCachedAttendance() {
                 self.currentSession = activeCached
                 self.isClockedIn = true
@@ -405,6 +417,29 @@ final class AttendanceViewModel {
             WidgetSyncManager.shared.syncClockOut(todayTotalHours: hours)
             isLoading = false
             return true
+        } catch let apiErr as APIError {
+            // Self-healing: If server responded with 404 (no active session found on server),
+            // clean up the local desynchronized state so the timer stops and the user is unblocked.
+            if case .notFound = apiErr {
+                await offlineStorage.clearOrphanedActiveAttendance()
+                self.isClockedIn = false
+                self.isOnBreak = false
+                self.currentSession = nil
+                self.elapsedSeconds = 0
+                self.breakSeconds = 0
+                stopTimer()
+                LocationTelemetryService.shared.stopTracking()
+                let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
+                let hours = Double(historicalSeconds) / 3600.0
+                WidgetSyncManager.shared.syncClockOut(todayTotalHours: hours)
+                isLoading = false
+                errorMessage = "Shift was already closed or not active on the server. Local shift timer has been reset."
+                return true
+            }
+
+            isLoading = false
+            errorMessage = apiErr.localizedDescription
+            return false
         } catch {
             isLoading = false
             errorMessage = error.localizedDescription

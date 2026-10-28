@@ -260,4 +260,31 @@ struct ServiceTests {
         telemetryService.stopTracking()
         #expect(telemetryService.isTrackingActive == false)
     }
+
+    @Test func testOrphanedActiveAttendanceCleanup() async throws {
+        let storage = OfflineStorageService.shared
+        let testRecord = AttendanceRecord(
+            id: UUID().uuidString,
+            workOrderId: "wo-test-cleanup",
+            technicianId: "tech-test-cleanup",
+            clockInTimestamp: ISO8601DateFormatter().string(from: Date()),
+            clockOutTimestamp: nil,
+            totalBillableSeconds: 0,
+            totalBreakSeconds: 0,
+            sessionStatus: .activeOnSite
+        )
+
+        // Save active record with isSyncPending == false (simulating synced session that closed on server)
+        await storage.upsertAttendance(testRecord, isSyncPending: false)
+
+        let activeBefore = await storage.fetchActiveCachedAttendance(technicianId: "tech-test-cleanup")
+        #expect(activeBefore != nil)
+        #expect(activeBefore?.id == testRecord.id)
+
+        // Run cleanup
+        await storage.clearOrphanedActiveAttendance(technicianId: "tech-test-cleanup")
+
+        let activeAfter = await storage.fetchActiveCachedAttendance(technicianId: "tech-test-cleanup")
+        #expect(activeAfter == nil)
+    }
 }
