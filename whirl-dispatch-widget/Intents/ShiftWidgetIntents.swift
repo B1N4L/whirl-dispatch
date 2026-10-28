@@ -31,6 +31,7 @@ struct ToggleBreakAppIntent: AppIntent {
         var snapshot = ShiftWidgetSnapshot.load()
         if snapshot.isClockedIn {
             snapshot.isOnBreak.toggle()
+            snapshot.pendingBreakSync = true
             snapshot.lastUpdated = Date()
             snapshot.save()
             ShiftWidgetSnapshot.reloadWidget()

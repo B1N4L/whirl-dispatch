@@ -234,6 +234,24 @@ final class AttendanceViewModel {
         } else {
             LocationTelemetryService.shared.stopTracking()
         }
+
+        // Sync any break toggle initiated from home screen widget intent
+        let widgetSnapshot = ShiftWidgetSnapshot.load()
+        if isClockedIn, widgetSnapshot.pendingBreakSync == true {
+            self.isOnBreak = widgetSnapshot.isOnBreak
+            var updatedSnap = widgetSnapshot
+            updatedSnap.pendingBreakSync = false
+            updatedSnap.save()
+
+            if let order = selectedWorkOrder, !offlineManager.isPlantRoomOffline {
+                let lat = order.facility?.latitude ?? 6.9175
+                let lng = order.facility?.longitude ?? 79.8580
+                Task {
+                    let _: BoundaryEventResponse? = try? await apiService.send(.pauseBreak(workOrderId: order.id, lat: lat, lng: lng))
+                }
+            }
+        }
+
         syncWidgetState()
         isLoading = false
     }
@@ -469,7 +487,7 @@ final class AttendanceViewModel {
 
     // sync shift state to home screen widget
     func syncWidgetState() {
-        let clockInDate: Date? = currentSession.flatMap { ISO8601DateFormatter().date(from: $0.clockInTimestamp) }
+        let clockInDate: Date? = isClockedIn ? currentSession.flatMap { ISO8601DateFormatter().date(from: $0.clockInTimestamp) } : nil
         let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
         let total = historicalSeconds + (isClockedIn ? elapsedSeconds : 0)
         let hours = Double(total) / 3600.0
@@ -478,10 +496,10 @@ final class AttendanceViewModel {
             isClockedIn: isClockedIn,
             isOnBreak: isOnBreak,
             clockInDate: clockInDate,
-            totalBreakSeconds: breakSeconds,
-            workOrderNumber: selectedWorkOrder?.workOrderNumber,
-            workOrderTitle: selectedWorkOrder?.title,
-            facilityName: selectedWorkOrder?.facility?.facilityName,
+            totalBreakSeconds: isClockedIn ? breakSeconds : 0,
+            workOrderNumber: isClockedIn ? selectedWorkOrder?.workOrderNumber : nil,
+            workOrderTitle: isClockedIn ? selectedWorkOrder?.title : nil,
+            facilityName: isClockedIn ? selectedWorkOrder?.facility?.facilityName : (selectedWorkOrder?.facility?.facilityName),
             todayTotalHours: hours
         )
     }

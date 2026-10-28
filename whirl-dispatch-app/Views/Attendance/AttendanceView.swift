@@ -375,6 +375,12 @@ struct AttendanceView: View {
                 await viewModel.loadAttendanceData()
                 viewModel.evaluateGeofence()
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                Task {
+                    await viewModel.loadAttendanceData()
+                    viewModel.evaluateGeofence()
+                }
+            }
             .sheet(isPresented: $showingTeamSiteMap) {
                 if let order = viewModel.selectedWorkOrder {
                     TeamSiteMapView(workOrderId: order.id)

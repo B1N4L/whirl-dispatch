@@ -18,6 +18,7 @@ struct ShiftWidgetSnapshot: Codable, Sendable {
     var activeFacilityName: String?
     var todayTotalHours: Double
     var lastUpdated: Date
+    var pendingBreakSync: Bool? = false
 
     static let appGroupSuiteName = "group.com.whirldispatch.app"
     static let storageKey = "whirldispatch_shift_widget_snapshot"
@@ -32,7 +33,8 @@ struct ShiftWidgetSnapshot: Codable, Sendable {
             activeWorkOrderTitle: nil,
             activeFacilityName: nil,
             todayTotalHours: 0.0,
-            lastUpdated: Date()
+            lastUpdated: Date(),
+            pendingBreakSync: false
         )
     }
 

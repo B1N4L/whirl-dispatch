@@ -726,6 +726,7 @@ struct ModelDecodingTests {
         #expect(decoded.activeFacilityName == "World Trade Center Colombo")
         #expect(decoded.totalBreakSeconds == 1245)
         #expect(decoded.todayTotalHours == 4.8)
+        #expect(decoded.pendingBreakSync == false)
     }
 
     @Test func testRecordTelemetryResponseDecoding() throws {
