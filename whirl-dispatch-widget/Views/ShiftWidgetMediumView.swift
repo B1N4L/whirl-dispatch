@@ -57,7 +57,7 @@ struct ShiftWidgetMediumView: View {
                             .foregroundColor(.secondary)
                     }
 
-                    Text(snapshot.activeFacilityName ?? "No Assigned Facility")
+                    Text(snapshot.isClockedIn ? (snapshot.activeFacilityName ?? "Commercial Job Site") : (snapshot.activeFacilityName ?? "No Dispatches Assigned"))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
@@ -91,20 +91,37 @@ struct ShiftWidgetMediumView: View {
 
             // Interactive Buttons
             if !snapshot.isClockedIn {
-                Button(intent: ClockInAppIntent()) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 12, weight: .bold))
-                        Text("Clock In to Job Site")
-                            .font(.system(size: 12, weight: .bold))
+                if snapshot.hasAssignedDispatch {
+                    Button(intent: ClockInAppIntent()) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("Clock In to Job Site")
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 32)
+                        .background(Color(red: 15/255, green: 43/255, blue: 72/255))
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 32)
-                    .background(Color(red: 15/255, green: 43/255, blue: 72/255))
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
+                    .buttonStyle(.plain)
+                } else {
+                    Button(intent: ViewDispatchesAppIntent()) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "doc.text.magnifyingglass")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("View Dispatches")
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 32)
+                        .background(Color(red: 120/255, green: 144/255, blue: 156/255).opacity(0.2))
+                        .foregroundColor(Color(red: 15/255, green: 43/255, blue: 72/255))
+                        .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             } else {
                 HStack(spacing: 8) {
                     Button(intent: ToggleBreakAppIntent()) {
@@ -144,14 +161,14 @@ struct ShiftWidgetMediumView: View {
 
     private var statusColor: Color {
         if !snapshot.isClockedIn {
-            return .secondary
+            return snapshot.hasAssignedDispatch ? .secondary : Color(red: 120/255, green: 144/255, blue: 156/255)
         }
         return snapshot.isOnBreak ? Color(red: 230/255, green: 81/255, blue: 0/255) : Color(red: 46/255, green: 125/255, blue: 50/255)
     }
 
     private var statusText: String {
         if !snapshot.isClockedIn {
-            return "OFF DUTY"
+            return snapshot.hasAssignedDispatch ? "OFF DUTY" : "STANDBY"
         }
         return snapshot.isOnBreak ? "ON BREAK" : "ON SITE"
     }

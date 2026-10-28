@@ -83,4 +83,9 @@ struct ShiftWidgetSnapshot: Codable, Sendable {
     var formattedTodayHours: String {
         String(format: "%.1f hrs", todayTotalHours)
     }
+
+    // whether technician has an assigned dispatch scheduled
+    var hasAssignedDispatch: Bool {
+        activeWorkOrderNumber != nil || activeFacilityName != nil
+    }
 }

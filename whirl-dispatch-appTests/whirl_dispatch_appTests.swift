@@ -116,4 +116,32 @@ struct whirl_dispatch_appTests {
         #expect(req.url?.absoluteString == "https://whirl-dispatch-backend-h6ub.vercel.app/api/health")
         #expect(req.httpMethod == "GET")
     }
+
+    @Test func testShiftWidgetSnapshotHasAssignedDispatch() async throws {
+        let assignedSnapshot = ShiftWidgetSnapshot(
+            isClockedIn: false,
+            isOnBreak: false,
+            clockInDate: nil,
+            totalBreakSeconds: 0,
+            activeWorkOrderNumber: "WO-2026-001",
+            activeWorkOrderTitle: "Chiller Overhaul",
+            activeFacilityName: "Apex Data Centers",
+            todayTotalHours: 2.5,
+            lastUpdated: Date()
+        )
+        #expect(assignedSnapshot.hasAssignedDispatch == true)
+
+        let standbySnapshot = ShiftWidgetSnapshot(
+            isClockedIn: false,
+            isOnBreak: false,
+            clockInDate: nil,
+            totalBreakSeconds: 0,
+            activeWorkOrderNumber: nil,
+            activeWorkOrderTitle: nil,
+            activeFacilityName: nil,
+            todayTotalHours: 0.0,
+            lastUpdated: Date()
+        )
+        #expect(standbySnapshot.hasAssignedDispatch == false)
+    }
 }

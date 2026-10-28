@@ -13,6 +13,7 @@ struct ClockDialButton: View {
     let isOnBreak: Bool
     let timeText: String
     let isLoading: Bool
+    var hasAssignedDispatch: Bool = true
     let action: () -> Void
 
     @State private var isPulsing = false
@@ -20,7 +21,7 @@ struct ClockDialButton: View {
 
     var body: some View {
         Button(action: {
-            guard !isLoading else { return }
+            guard !isLoading && (isClockedIn || hasAssignedDispatch) else { return }
 
             // heavy haptic feedback on clocking transition
             let generator = UIImpactFeedbackGenerator(style: .heavy)
@@ -51,14 +52,14 @@ struct ClockDialButton: View {
                         LinearGradient(
                             colors: isClockedIn
                                 ? (isOnBreak ? [Color(hex: "BF360C"), Color.statusAmber] : [Color(hex: "1B5E20"), Color.statusGreen])
-                                : [Color.brandNavyDark, Color.brandNavy],
+                                : (hasAssignedDispatch ? [Color.brandNavyDark, Color.brandNavy] : [Color(hex: "455A64"), Color(hex: "607D8B")]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .frame(width: 210, height: 210)
                     .shadow(
-                        color: isClockedIn ? (isOnBreak ? Color.statusAmber.opacity(0.4) : Color.statusGreen.opacity(0.4)) : Color.brandNavy.opacity(0.35),
+                        color: isClockedIn ? (isOnBreak ? Color.statusAmber.opacity(0.4) : Color.statusGreen.opacity(0.4)) : (hasAssignedDispatch ? Color.brandNavy.opacity(0.35) : Color(hex: "455A64").opacity(0.25)),
                         radius: 14,
                         x: 0,
                         y: 8
@@ -88,6 +89,20 @@ struct ClockDialButton: View {
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(.white.opacity(0.65))
                             .padding(.top, 4)
+                    } else if !hasAssignedDispatch {
+                        Image(systemName: "calendar.badge.clock")
+                            .font(.system(size: 38))
+                            .foregroundColor(.white.opacity(0.85))
+                            .padding(.bottom, 2)
+
+                        Text("STANDBY")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.white)
+                            .tracking(1.0)
+
+                        Text("No Dispatch Assigned")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
                     } else {
                         Image(systemName: "clock.badge.checkmark.fill")
                             .font(.system(size: 38))
@@ -107,8 +122,8 @@ struct ClockDialButton: View {
             }
             .frame(width: 230, height: 230)
         }
-        .disabled(isLoading)
-        .accessibilityLabel(isClockedIn ? "Clock out. Elapsed time \(timeText)" : "Clock in to site shift")
+        .disabled(isLoading || (!isClockedIn && !hasAssignedDispatch))
+        .accessibilityLabel(!hasAssignedDispatch ? "Standby. No dispatch assigned" : (isClockedIn ? "Clock out. Elapsed time \(timeText)" : "Clock in to site shift"))
         .accessibilityAddTraits(.isButton)
         .onAppear {
             if isClockedIn {
@@ -124,7 +139,8 @@ struct ClockDialButton: View {
 
 #Preview {
     VStack(spacing: 30) {
-        ClockDialButton(isClockedIn: false, isOnBreak: false, timeText: "00:00:00", isLoading: false) {}
-        ClockDialButton(isClockedIn: true, isOnBreak: false, timeText: "02:15:42", isLoading: false) {}
+        ClockDialButton(isClockedIn: false, isOnBreak: false, timeText: "00:00:00", isLoading: false, hasAssignedDispatch: true) {}
+        ClockDialButton(isClockedIn: false, isOnBreak: false, timeText: "00:00:00", isLoading: false, hasAssignedDispatch: false) {}
+        ClockDialButton(isClockedIn: true, isOnBreak: false, timeText: "02:15:42", isLoading: false, hasAssignedDispatch: true) {}
     }
 }

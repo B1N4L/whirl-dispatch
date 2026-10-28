@@ -40,16 +40,21 @@ final class WidgetSyncManager {
         ShiftWidgetSnapshot.reloadWidget()
     }
 
-    // clear active shift state when clocking out
-    func syncClockOut(todayTotalHours: Double) {
+    // clear active shift state when clocking out, preserving assigned dispatch metadata if available
+    func syncClockOut(
+        todayTotalHours: Double,
+        workOrderNumber: String? = nil,
+        workOrderTitle: String? = nil,
+        facilityName: String? = nil
+    ) {
         let snapshot = ShiftWidgetSnapshot(
             isClockedIn: false,
             isOnBreak: false,
             clockInDate: nil,
             totalBreakSeconds: 0,
-            activeWorkOrderNumber: nil,
-            activeWorkOrderTitle: nil,
-            activeFacilityName: nil,
+            activeWorkOrderNumber: workOrderNumber,
+            activeWorkOrderTitle: workOrderTitle,
+            activeFacilityName: facilityName,
             todayTotalHours: todayTotalHours,
             lastUpdated: Date()
         )

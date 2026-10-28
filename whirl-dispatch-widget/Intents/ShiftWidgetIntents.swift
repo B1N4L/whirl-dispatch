@@ -52,3 +52,15 @@ struct ClockOutAppIntent: AppIntent {
         return .result()
     }
 }
+
+// view dispatches button trigger
+struct ViewDispatchesAppIntent: AppIntent {
+    static var title: LocalizedStringResource = "View Dispatches"
+    static var description = IntentDescription("Opens WhirlDispatch to view newly assigned work order dispatches.")
+    static var openAppWhenRun: Bool = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        return .result()
+    }
+}

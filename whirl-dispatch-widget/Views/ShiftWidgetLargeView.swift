@@ -73,17 +73,17 @@ struct ShiftWidgetLargeView: View {
 
                     Spacer()
 
-                    Image(systemName: "building.2.fill")
+                    Image(systemName: snapshot.hasAssignedDispatch ? "building.2.fill" : "calendar.badge.clock")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
 
-                Text(snapshot.activeWorkOrderTitle ?? "No work order in progress")
+                Text(snapshot.activeWorkOrderTitle ?? (snapshot.hasAssignedDispatch ? "No work order in progress" : "No Dispatches Assigned"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.primary)
                     .lineLimit(1)
 
-                Text(snapshot.activeFacilityName ?? "Standby for new commercial dispatch")
+                Text(snapshot.activeFacilityName ?? (snapshot.hasAssignedDispatch ? "Standby for new commercial dispatch" : "Awaiting dispatch schedule from supervisor"))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
                     .lineLimit(1)
@@ -126,20 +126,37 @@ struct ShiftWidgetLargeView: View {
 
             // Interactive Buttons
             if !snapshot.isClockedIn {
-                Button(intent: ClockInAppIntent()) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 14, weight: .bold))
-                        Text("Clock In to Job Site")
-                            .font(.system(size: 13, weight: .bold))
+                if snapshot.hasAssignedDispatch {
+                    Button(intent: ClockInAppIntent()) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("Clock In to Job Site")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 38)
+                        .background(Color(red: 15/255, green: 43/255, blue: 72/255))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 38)
-                    .background(Color(red: 15/255, green: 43/255, blue: 72/255))
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
+                    .buttonStyle(.plain)
+                } else {
+                    Button(intent: ViewDispatchesAppIntent()) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "doc.text.magnifyingglass")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("View Dispatches")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 38)
+                        .background(Color(red: 120/255, green: 144/255, blue: 156/255).opacity(0.2))
+                        .foregroundColor(Color(red: 15/255, green: 43/255, blue: 72/255))
+                        .cornerRadius(10)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             } else {
                 HStack(spacing: 10) {
                     Button(intent: ToggleBreakAppIntent()) {
@@ -179,14 +196,14 @@ struct ShiftWidgetLargeView: View {
 
     private var statusColor: Color {
         if !snapshot.isClockedIn {
-            return .secondary
+            return snapshot.hasAssignedDispatch ? .secondary : Color(red: 120/255, green: 144/255, blue: 156/255)
         }
         return snapshot.isOnBreak ? Color(red: 230/255, green: 81/255, blue: 0/255) : Color(red: 46/255, green: 125/255, blue: 50/255)
     }
 
     private var statusText: String {
         if !snapshot.isClockedIn {
-            return "OFF DUTY"
+            return snapshot.hasAssignedDispatch ? "OFF DUTY" : "STANDBY"
         }
         return snapshot.isOnBreak ? "ON BREAK" : "ON SITE"
     }

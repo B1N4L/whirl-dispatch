@@ -55,9 +55,67 @@ struct AttendanceView: View {
                             .foregroundColor(.secondary)
 
                         if viewModel.assignedWorkOrders.isEmpty {
-                            Text("No assigned work orders. Refresh dispatches.")
-                                .font(.appCaption)
-                                .foregroundColor(.secondary)
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color(hex: "607D8B").opacity(0.12))
+                                            .frame(width: 40, height: 40)
+
+                                        Image(systemName: "calendar.badge.exclamationmark")
+                                            .font(.system(size: 18))
+                                            .foregroundColor(Color(hex: "455A64"))
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("No Active Dispatches")
+                                            .font(.appHeadline)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.primary)
+
+                                        Text("You are not currently scheduled for any work orders.")
+                                            .font(.appCaption)
+                                            .foregroundColor(.secondary)
+                                    }
+
+                                    Spacer()
+                                }
+
+                                HStack {
+                                    Text("Awaiting dispatch assignment from supervisor or dispatcher.")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+
+                                    Spacer()
+
+                                    Button(action: {
+                                        Task {
+                                            await viewModel.loadAttendanceData()
+                                        }
+                                    }) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "arrow.clockwise")
+                                                .font(.caption2.bold())
+                                            Text("Refresh")
+                                                .font(.caption2.bold())
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Color.brandNavy.opacity(0.1))
+                                        .foregroundColor(Color.brandNavy)
+                                        .cornerRadius(6)
+                                    }
+                                }
+                            }
+                            .padding(14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.cardBackground)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.surfaceBorder, lineWidth: 1)
+                            )
                         } else {
                             Menu {
                                 ForEach(viewModel.assignedWorkOrders) { order in
@@ -252,7 +310,8 @@ struct AttendanceView: View {
                             isClockedIn: viewModel.isClockedIn,
                             isOnBreak: viewModel.isOnBreak,
                             timeText: viewModel.formattedElapsedTime,
-                            isLoading: viewModel.isLoading
+                            isLoading: viewModel.isLoading,
+                            hasAssignedDispatch: viewModel.selectedWorkOrder != nil
                         ) {
                             if viewModel.isClockedIn {
                                 showingClockOutConfirmation = true

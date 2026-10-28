@@ -269,6 +269,7 @@ final class AttendanceViewModel {
                 self.attendanceHistory = []
             }
         }
+        syncWidgetState()
     }
 
 
@@ -414,7 +415,12 @@ final class AttendanceViewModel {
             LocationTelemetryService.shared.stopTracking()
             let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
             let hours = Double(historicalSeconds) / 3600.0
-            WidgetSyncManager.shared.syncClockOut(todayTotalHours: hours)
+            WidgetSyncManager.shared.syncClockOut(
+                todayTotalHours: hours,
+                workOrderNumber: selectedWorkOrder?.workOrderNumber,
+                workOrderTitle: selectedWorkOrder?.title,
+                facilityName: selectedWorkOrder?.facility?.facilityName
+            )
             isLoading = false
             return true
         }
@@ -432,7 +438,12 @@ final class AttendanceViewModel {
             LocationTelemetryService.shared.stopTracking()
             let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
             let hours = Double(historicalSeconds) / 3600.0
-            WidgetSyncManager.shared.syncClockOut(todayTotalHours: hours)
+            WidgetSyncManager.shared.syncClockOut(
+                todayTotalHours: hours,
+                workOrderNumber: selectedWorkOrder?.workOrderNumber,
+                workOrderTitle: selectedWorkOrder?.title,
+                facilityName: selectedWorkOrder?.facility?.facilityName
+            )
             isLoading = false
             return true
         } catch let apiErr as APIError {
@@ -449,7 +460,12 @@ final class AttendanceViewModel {
                 LocationTelemetryService.shared.stopTracking()
                 let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
                 let hours = Double(historicalSeconds) / 3600.0
-                WidgetSyncManager.shared.syncClockOut(todayTotalHours: hours)
+                WidgetSyncManager.shared.syncClockOut(
+                    todayTotalHours: hours,
+                    workOrderNumber: selectedWorkOrder?.workOrderNumber,
+                    workOrderTitle: selectedWorkOrder?.title,
+                    facilityName: selectedWorkOrder?.facility?.facilityName
+                )
                 isLoading = false
                 errorMessage = "Shift was already closed or not active on the server. Local shift timer has been reset."
                 return true
@@ -497,9 +513,9 @@ final class AttendanceViewModel {
             isOnBreak: isOnBreak,
             clockInDate: clockInDate,
             totalBreakSeconds: isClockedIn ? breakSeconds : 0,
-            workOrderNumber: isClockedIn ? selectedWorkOrder?.workOrderNumber : nil,
-            workOrderTitle: isClockedIn ? selectedWorkOrder?.title : nil,
-            facilityName: isClockedIn ? selectedWorkOrder?.facility?.facilityName : (selectedWorkOrder?.facility?.facilityName),
+            workOrderNumber: selectedWorkOrder?.workOrderNumber,
+            workOrderTitle: selectedWorkOrder?.title,
+            facilityName: selectedWorkOrder?.facility?.facilityName,
             todayTotalHours: hours
         )
     }
