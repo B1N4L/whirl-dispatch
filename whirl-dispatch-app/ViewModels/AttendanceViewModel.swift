@@ -211,7 +211,14 @@ final class AttendanceViewModel {
 
         _ = evaluateGeofence()
         if isClockedIn, let woId = currentSession?.workOrderId ?? selectedWorkOrder?.id {
-            LocationTelemetryService.shared.startTracking(workOrderId: woId)
+            let activeOrder = assignedWorkOrders.first(where: { $0.id == woId }) ?? selectedWorkOrder
+            let fac = activeOrder?.facility
+            LocationTelemetryService.shared.startTracking(
+                workOrderId: woId,
+                facilityName: fac?.facilityName,
+                facilityCoordinate: fac?.coordinate,
+                geofenceRadius: fac?.geofenceRadius
+            )
         } else {
             LocationTelemetryService.shared.stopTracking()
         }
@@ -249,6 +256,14 @@ final class AttendanceViewModel {
             radiusMeters: facility.geofenceRadius
         )
         self.geofenceEvaluation = eval
+
+        if isClockedIn {
+            LocationTelemetryService.shared.checkGeofenceBreach(
+                userCoordinate: locationManager.effectiveCoordinate,
+                isOnBreak: isOnBreak
+            )
+        }
+
         return eval
     }
 
@@ -295,7 +310,12 @@ final class AttendanceViewModel {
           self.elapsedSeconds = 0
           self.breakSeconds = 0
           startTimer()
-          LocationTelemetryService.shared.startTracking(workOrderId: order.id)
+          LocationTelemetryService.shared.startTracking(
+              workOrderId: order.id,
+              facilityName: order.facility?.facilityName,
+              facilityCoordinate: order.facility?.coordinate,
+              geofenceRadius: order.facility?.geofenceRadius
+          )
           syncWidgetState()
           isLoading = false
           return true
@@ -309,7 +329,12 @@ final class AttendanceViewModel {
           self.breakSeconds = 0
           await offlineStorage.upsertAttendance(res.session, isSyncPending: false)
           startTimer()
-          LocationTelemetryService.shared.startTracking(workOrderId: order.id)
+          LocationTelemetryService.shared.startTracking(
+              workOrderId: order.id,
+              facilityName: order.facility?.facilityName,
+              facilityCoordinate: order.facility?.coordinate,
+              geofenceRadius: order.facility?.geofenceRadius
+          )
           syncWidgetState()
           isLoading = false
           return true

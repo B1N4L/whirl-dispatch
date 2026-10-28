@@ -216,4 +216,48 @@ struct ServiceTests {
         locationManager.resetSimulation()
         #expect(locationManager.isSimulatedLocationActive == false)
     }
+
+    @Test func testLocationTelemetryGeofenceBreachEvaluationAndCooldown() throws {
+        let telemetryService = LocationTelemetryService.shared
+        let facilityCoord = CLLocationCoordinate2D(latitude: 6.9344, longitude: 79.8428)
+        let remoteCoord = CLLocationCoordinate2D(latitude: 6.9120, longitude: 79.8507)
+
+        telemetryService.startTracking(
+            workOrderId: "wo-test-breach",
+            facilityName: "Test Facility",
+            facilityCoordinate: facilityCoord,
+            geofenceRadius: 150.0
+        )
+
+        #expect(telemetryService.isTrackingActive == true)
+        #expect(telemetryService.activeFacilityName == "Test Facility")
+
+        // 1. When inside geofence, no breach is triggered
+        telemetryService.checkGeofenceBreach(userCoordinate: facilityCoord, isOnBreak: false)
+        #expect(telemetryService.wasInsideGeofence == true)
+        #expect(telemetryService.lastBreachNotificationDate == nil)
+
+        // 2. When outside geofence during work shift, breach notification timestamp is set
+        telemetryService.checkGeofenceBreach(userCoordinate: remoteCoord, isOnBreak: false)
+        #expect(telemetryService.wasInsideGeofence == false)
+        let firstBreachDate = try #require(telemetryService.lastBreachNotificationDate)
+
+        // 3. Repeated call immediately within 5-minute cooldown does not advance breach notification timestamp
+        telemetryService.checkGeofenceBreach(userCoordinate: remoteCoord, isOnBreak: false)
+        #expect(telemetryService.lastBreachNotificationDate == firstBreachDate)
+
+        // 4. When on break, breach evaluation is suppressed
+        telemetryService.stopTracking()
+        telemetryService.startTracking(
+            workOrderId: "wo-test-breach",
+            facilityName: "Test Facility",
+            facilityCoordinate: facilityCoord,
+            geofenceRadius: 150.0
+        )
+        telemetryService.checkGeofenceBreach(userCoordinate: remoteCoord, isOnBreak: true)
+        #expect(telemetryService.lastBreachNotificationDate == nil)
+
+        telemetryService.stopTracking()
+        #expect(telemetryService.isTrackingActive == false)
+    }
 }

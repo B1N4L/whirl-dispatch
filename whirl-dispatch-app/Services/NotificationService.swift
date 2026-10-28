@@ -59,6 +59,32 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    func scheduleGeofenceBreachNotification(
+        facilityName: String,
+        distanceMeters: Double,
+        radiusMeters: Double
+    ) {
+        let content = UNMutableNotificationContent()
+        content.title = "Geofence Perimeter Warning"
+        content.subtitle = facilityName
+        content.body = "You have exited the designated site boundary (\(Int(distanceMeters))m from site, perimeter is \(Int(radiusMeters))m). Please return to the site or pause your shift."
+        content.sound = .default
+        content.badge = 1
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.5, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: "geofence-breach-\(UUID().uuidString)",
+            content: content,
+            trigger: trigger
+        )
+
+        center.add(request) { error in
+            if let error = error {
+                print("[NOTIFICATIONS ERROR] Failed to schedule geofence breach notification: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // Deliver notification banner even while the application is active in the foreground
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,

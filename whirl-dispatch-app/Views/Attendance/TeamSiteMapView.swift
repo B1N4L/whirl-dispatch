@@ -105,12 +105,18 @@ struct TeamSiteMapView: View {
 
                 // Top Floating Telemetry Header
                 if let data = telemetry {
-                    VStack {
+                    VStack(spacing: 8) {
                         topTelemetryBar(data: data)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
+
+                        let breachMembers = data.team.filter { $0.isClockedIn && !$0.isInsideGeofence }
+                        if !breachMembers.isEmpty {
+                            breachAlertBanner(breachMembers: breachMembers)
+                        }
+
                         Spacer()
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
 
                     // Bottom Floating Roster Card
                     bottomRosterSheet(data: data)
@@ -195,6 +201,63 @@ struct TeamSiteMapView: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(UIColor.secondarySystemBackground).opacity(0.95))
                 .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+        )
+    }
+
+    @ViewBuilder
+    private func breachAlertBanner(breachMembers: [TeamMemberTelemetry]) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(Color.statusRed)
+                .font(.system(size: 16))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(breachMembers.count == 1 ? "Perimeter Breach Detected" : "\(breachMembers.count) Perimeter Breaches")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Color.statusRed)
+
+                Text(
+                    breachMembers.count == 1
+                    ? "\(breachMembers[0].fullName) is outside site bounds (\(breachMembers[0].formattedDistance))"
+                    : "\(breachMembers.map { $0.fullName.components(separatedBy: " ").first ?? $0.fullName }.joined(separator: ", ")) outside bounds"
+                )
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+            }
+
+            Spacer()
+
+            if let first = breachMembers.first {
+                Button("Locate") {
+                    withAnimation(.spring()) {
+                        selectedMember = first
+                        cameraPosition = .region(
+                            MKCoordinateRegion(
+                                center: first.coordinate,
+                                latitudinalMeters: 400,
+                                longitudinalMeters: 400
+                            )
+                        )
+                    }
+                }
+                .font(.system(size: 11, weight: .bold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.statusRed.opacity(0.12))
+                .foregroundColor(Color.statusRed)
+                .cornerRadius(6)
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(UIColor.secondarySystemBackground).opacity(0.96))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.statusRed.opacity(0.4), lineWidth: 1)
+                )
+                .shadow(color: Color.statusRed.opacity(0.15), radius: 6, x: 0, y: 2)
         )
     }
 
