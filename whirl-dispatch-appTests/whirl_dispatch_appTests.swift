@@ -192,12 +192,6 @@ struct whirl_dispatch_appTests {
             // Completed history must contain completed job
             #expect(vm.completedHistory.count == 1)
             #expect(vm.completedHistory.first?.id == "wo-completed")
-
-            // Search query filtering
-            vm.searchQuery = "Compressor"
-            #expect(vm.isSearching == true)
-            #expect(vm.searchResults.count == 1)
-            #expect(vm.searchResults.first?.id == "wo-active")
         }
     }
 

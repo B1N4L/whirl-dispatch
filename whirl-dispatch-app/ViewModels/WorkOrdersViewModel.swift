@@ -24,7 +24,6 @@ enum WorkOrderFilter: String, CaseIterable, Identifiable {
 final class WorkOrdersViewModel {
     var workOrders: [WorkOrder] = []
     var selectedFilter: WorkOrderFilter = .all
-    var searchQuery: String = ""
     var isLoading: Bool = false
     var isOffline: Bool = false
     var errorMessage: String? = nil
@@ -66,26 +65,8 @@ final class WorkOrdersViewModel {
         return Array(completedHistory[startIndex..<endIndex])
     }
 
-    // whether a search query is active
-    var isSearching: Bool {
-        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
 
-    // search results matching search query across all dispatches
-    var searchResults: [WorkOrder] {
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return [] }
-        return workOrders.filter { order in
-            order.workOrderNumber.lowercased().contains(query) ||
-            order.title.lowercased().contains(query) ||
-            order.description.lowercased().contains(query) ||
-            (order.facility?.facilityName.lowercased().contains(query) ?? false) ||
-            (order.facility?.companyName.lowercased().contains(query) ?? false)
-        }
-    }
-
-
-    // computed filtered list matching chips and search box
+    // computed filtered list matching chips
     var filteredWorkOrders: [WorkOrder] {
       var list = workOrders
 
@@ -99,18 +80,6 @@ final class WorkOrdersViewModel {
           list = list.filter { $0.status == .onSiteActive || $0.status == .enRoute }
       case .completed:
           list = list.filter { $0.status == .completed || $0.status == .billed }
-      }
-
-      // filter by search query if typed
-      let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-      if !query.isEmpty {
-          list = list.filter { order in
-              order.workOrderNumber.lowercased().contains(query) ||
-              order.title.lowercased().contains(query) ||
-              order.description.lowercased().contains(query) ||
-              (order.facility?.facilityName.lowercased().contains(query) ?? false) ||
-              (order.facility?.companyName.lowercased().contains(query) ?? false)
-          }
       }
 
       return list

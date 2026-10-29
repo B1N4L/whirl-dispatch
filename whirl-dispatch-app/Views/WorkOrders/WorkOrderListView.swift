@@ -56,14 +56,11 @@ struct WorkOrderListView: View {
                         .font(.appSubheadline)
                         .foregroundColor(.secondary)
                     Spacer()
-                } else if viewModel.isSearching {
-                    searchContent
                 } else {
                     dashboardContent
                 }
             }
             .navigationTitle("Dispatches")
-            .searchable(text: $viewModel.searchQuery, prompt: "Search work orders, facilities, chiller...")
             .task {
                 if viewModel.workOrders.isEmpty {
                     await viewModel.loadWorkOrders()
@@ -739,52 +736,6 @@ struct WorkOrderListView: View {
                     }
                     .padding(.top, 6)
                 }
-            }
-        }
-    }
-
-    // search content
-    private var searchContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if viewModel.searchResults.isEmpty {
-                Spacer()
-                EmptyStateView(
-                    icon: "magnifyingglass",
-                    title: "No Results Found",
-                    message: "No dispatches match \"\(viewModel.searchQuery)\".",
-                    actionTitle: "Clear Search"
-                ) {
-                    viewModel.searchQuery = ""
-                }
-                .padding(.horizontal, 24)
-                Spacer()
-            } else {
-                HStack {
-                    Text("Search Results")
-                        .font(.appSubheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.secondary)
-
-                    Spacer()
-
-                    Text("\(viewModel.searchResults.count) found")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-
-                List {
-                    ForEach(viewModel.searchResults) { order in
-                        NavigationLink(destination: WorkOrderDetailView(order: order, viewModel: viewModel)) {
-                            WorkOrderCardView(order: order)
-                        }
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                    }
-                }
-                .listStyle(.plain)
             }
         }
     }
