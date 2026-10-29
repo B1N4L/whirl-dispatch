@@ -1479,28 +1479,6 @@ struct SupervisorSplitView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
-
-                        // Shortcut to view full dispatch
-                        Button(action: {
-                            if let wo = viewModel.workOrders.first(where: {
-                                $0.id == tech.activeWorkOrderId ||
-                                $0.workOrderNumber == tech.activeWorkOrderNumber
-                            }) {
-                                viewModel.selectedWorkOrder = wo
-                                selectedMenu = .activeDispatches
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: "arrow.up.right.square.fill")
-                                Text("View Full Dispatch")
-                                    .fontWeight(.bold)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Color.brandNavy)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                        }
                     }
                     .padding(16)
                     .background(Color(uiColor: .secondarySystemGroupedBackground))
