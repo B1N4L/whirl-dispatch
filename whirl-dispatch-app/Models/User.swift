@@ -137,12 +137,22 @@ struct TechnicianItem: Identifiable, Codable, Equatable, Hashable {
     let email: String
     let phone: String?
     let role: UserRole
+    let hourlyLaborRate: String?
+    let biometricEnrolled: Bool?
     let isAvailable: Bool
     let status: String
     let activeWorkOrderId: String?
     let activeWorkOrderNumber: String?
     let activeWorkOrderTitle: String?
+    let activeWorkOrderDescription: String?
+    let activeWorkOrderPriority: String?
+    let activeWorkOrderStatus: String?
+    let activeWorkOrderScheduledStart: String?
+    let activeWorkOrderScheduledEnd: String?
+    let isLeadOnActiveJob: Bool?
+    let companyName: String?
     let facilityName: String?
+    let facilityAddress: String?
 }
 
 struct TechniciansResponse: Codable {

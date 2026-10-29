@@ -123,7 +123,15 @@ struct SupervisorSplitView: View {
                         }
 
                     case .teamStatus:
-                        teamRosterDetailPane
+                        if let tech = viewModel.selectedTechnician {
+                            technicianDetailPane(tech)
+                        } else {
+                            EmptyStateView(
+                                icon: "person.crop.circle.badge.questionmark",
+                                title: "No Technician Selected",
+                                message: "Select a technician or lead technician from the roster to inspect profile details and active dispatch assignment."
+                            )
+                        }
 
                     case .fleetMap:
                         FacilityMapView(
@@ -467,45 +475,182 @@ struct SupervisorSplitView: View {
     }
 
     private var teamRosterContentList: some View {
-        List(viewModel.technicians) { tech in
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(tech.name)
-                        .font(.appHeadline)
-                        .foregroundColor(.primary)
-                    Spacer()
-                    HStack(spacing: 4) {
-                        Image(systemName: tech.status.iconName)
-                            .font(.system(size: 10))
-                        Text(tech.status.rawValue)
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    .foregroundColor(tech.status.color)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(tech.status.color.opacity(0.12))
-                    .clipShape(Capsule())
+        VStack(spacing: 0) {
+            // Action header on top
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Team Roster")
+                        .font(.appSubheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(Color.brandNavy)
+                    Text("\(viewModel.filteredTechnicians.count) Personnel deployed across fleet")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
 
-                Text(tech.roleTitle)
-                    .font(.appCaption)
-                    .foregroundColor(.secondary)
+                Spacer()
 
-                if let dispatch = tech.assignedWorkOrderTitle {
-                    HStack(spacing: 4) {
-                        Image(systemName: "wrench.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(Color.brandNavy)
-                        Text(dispatch)
-                            .font(.system(size: 12))
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
+                if viewModel.isLoading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+
+            // Status filter segmented control
+            Picker("Status Filter", selection: $viewModel.technicianStatusFilter) {
+                ForEach(TechnicianStatusFilter.allCases) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+
+            // Search bar
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+                TextField("Search name, role, facility, work order...", text: $viewModel.technicianSearchQuery)
+                    .font(.caption)
+                    .textFieldStyle(.plain)
+                if !viewModel.technicianSearchQuery.isEmpty {
+                    Button {
+                        viewModel.technicianSearchQuery = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
                     }
                 }
             }
-            .padding(.vertical, 4)
+            .padding(7)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .cornerRadius(8)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 8)
+
+            Divider()
+
+            if viewModel.filteredTechnicians.isEmpty {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Image(systemName: "person.crop.circle.badge.questionmark")
+                        .font(.system(size: 36))
+                        .foregroundColor(.secondary)
+                    Text("No Personnel Found")
+                        .font(.appHeadline)
+                        .foregroundColor(.primary)
+                    Text(viewModel.technicianSearchQuery.isEmpty
+                         ? "No technicians currently matching '\(viewModel.technicianStatusFilter.rawValue)'."
+                         : "No personnel found matching '\(viewModel.technicianSearchQuery)'.")
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(viewModel.filteredTechnicians, selection: $viewModel.selectedTechnician) { tech in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Text(tech.name)
+                                        .font(.appHeadline)
+                                        .foregroundColor(.primary)
+                                        .lineLimit(1)
+
+                                    if tech.isLeadTechnician {
+                                        Text("LEAD")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 1.5)
+                                            .background(Color.brandNavy)
+                                            .clipShape(Capsule())
+                                    }
+                                }
+
+                                Text(tech.roleTitle)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            VStack(alignment: .trailing, spacing: 3) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: tech.status.iconName)
+                                        .font(.system(size: 9))
+                                    Text(tech.status.rawValue)
+                                        .font(.system(size: 10, weight: .bold))
+                                }
+                                .foregroundColor(tech.status.color)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(tech.status.color.opacity(0.12))
+                                .clipShape(Capsule())
+
+                                if let rate = tech.hourlyRate {
+                                    Text(rate)
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+
+                        // Dispatch context or availability indicator
+                        if tech.isDispatched {
+                            HStack(spacing: 5) {
+                                Image(systemName: "wrench.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(Color.brandNavy)
+
+                                Text(tech.activeWorkOrderNumber ?? "WO-ACTIVE")
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundColor(Color.brandNavy)
+
+                                Text("•")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.secondary)
+
+                                Text(tech.facilityName ?? "Commercial Plant Room")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                        } else {
+                            HStack(spacing: 5) {
+                                Image(systemName: "clock.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(Color.statusAmber)
+
+                                Text("Ready for Dispatch • \(tech.facilityName ?? "Central Base")")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        viewModel.selectedTechnician = tech
+                    }
+                    .tag(tech)
+                }
+                .listStyle(.plain)
+                .refreshable {
+                    await viewModel.loadSupervisorData()
+                }
+            }
         }
-        .listStyle(.plain)
     }
 
     private var fleetMapContentList: some View {
@@ -1091,57 +1236,324 @@ struct SupervisorSplitView: View {
         .background(Color(uiColor: .systemGroupedBackground))
     }
 
-    private var teamRosterDetailPane: some View {
+    private func technicianDetailPane(_ tech: TechnicianMember) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Technician Team Deployment")
-                    .font(.appTitle)
+            VStack(alignment: .leading, spacing: 18) {
+                // Header profile card
+                HStack(alignment: .top, spacing: 16) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.brandNavy)
+                            .frame(width: 58, height: 58)
+                        Text(tech.name.split(separator: " ").prefix(2).map { String($0.prefix(1)) }.joined())
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                    }
 
-                Text("Real-time roster of active technicians deployed across regional plant rooms.")
-                    .font(.appSubheadline)
-                    .foregroundColor(.secondary)
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 8) {
+                            Text(tech.name)
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundColor(.primary)
 
-                ForEach(viewModel.technicians) { tech in
-                    VStack(alignment: .leading, spacing: 8) {
+                            if tech.isLeadTechnician {
+                                Text("LEAD TECHNICIAN")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(Color.brandNavy)
+                                    .clipShape(Capsule())
+                            }
+                        }
+
+                        Text(tech.roleTitle)
+                            .font(.appSubheadline)
+                            .foregroundColor(.secondary)
+
+                        HStack(spacing: 8) {
+                            HStack(spacing: 4) {
+                                Image(systemName: tech.status.iconName)
+                                    .font(.system(size: 10))
+                                Text(tech.status.rawValue)
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .foregroundColor(tech.status.color)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 2.5)
+                            .background(tech.status.color.opacity(0.12))
+                            .clipShape(Capsule())
+
+                            Text("•")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+
+                            Text(tech.lastSeenText)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    // Quick communications
+                    HStack(spacing: 10) {
+                        Link(destination: URL(string: "tel:\(tech.contactNumber)")!) {
+                            Image(systemName: "phone.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(Color.statusGreen)
+                        }
+
+                        Link(destination: URL(string: "mailto:\(tech.email)")!) {
+                            Image(systemName: "envelope.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(Color.accentBlue)
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                // Personnel credentials block
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Personnel Credentials")
+                        .font(.appHeadline)
+                        .foregroundColor(Color.brandNavy)
+
+                    Divider()
+
+                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+                        GridRow {
+                            Text("Mobile Phone")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(tech.contactNumber)
+                                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        }
+
+                        GridRow {
+                            Text("Email Address")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(tech.email)
+                                .font(.system(size: 13, weight: .medium))
+                        }
+
+                        GridRow {
+                            Text("Hourly Labor Rate")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(tech.hourlyRate ?? "$85.00/hr")
+                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                .foregroundColor(Color.brandNavy)
+                        }
+
+                        GridRow {
+                            Text("Biometric Status")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack(spacing: 4) {
+                                Image(systemName: tech.biometricEnrolled ? "checkmark.seal.fill" : "exclamationmark.circle.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(tech.biometricEnrolled ? Color.statusGreen : Color.statusAmber)
+                                Text(tech.biometricEnrolled ? "Enrolled (Face ID / Biometric Verified)" : "Standard Credentials")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                        }
+
+                        GridRow {
+                            Text("Home Base")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(tech.facilityName ?? "Central Operations Base")
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                // Current Dispatched Job Card (if dispatched)
+                if tech.isDispatched {
+                    VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(tech.name)
-                                    .font(.appHeadline)
-                                Text(tech.roleTitle)
+                            Label("Current Dispatched Job", systemImage: "wrench.and.screwdriver.fill")
+                                .font(.appHeadline)
+                                .foregroundColor(Color.brandNavy)
+
+                            Spacer()
+
+                            HStack(spacing: 4) {
+                                Image(systemName: tech.status.iconName)
+                                    .font(.system(size: 10))
+                                Text(tech.activeWorkOrderStatus ?? tech.status.rawValue)
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                            .foregroundColor(tech.status.color)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(tech.status.color.opacity(0.12))
+                            .clipShape(Capsule())
+                        }
+
+                        Divider()
+
+                        // Job code and priority banner
+                        HStack {
+                            Text(tech.activeWorkOrderNumber ?? "WO-ACTIVE")
+                                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                                .foregroundColor(Color.brandNavy)
+
+                            Spacer()
+
+                            let isEmergency = tech.activeWorkOrderPriority == "CRITICAL_EMERGENCY"
+                            Text(isEmergency ? "Critical Emergency" : (tech.activeWorkOrderPriority ?? "Standard Dispatch"))
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(isEmergency ? Color.statusRed : Color.brandNavy)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background((isEmergency ? Color.statusRed : Color.brandNavy).opacity(0.1))
+                                .clipShape(Capsule())
+                        }
+
+                        // Title and description brief
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(tech.activeWorkOrderTitle ?? "Commercial Field Service")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.primary)
+
+                            if let desc = tech.activeWorkOrderDescription, !desc.isEmpty {
+                                Text(desc)
                                     .font(.appCaption)
                                     .foregroundColor(.secondary)
                             }
+                        }
+
+                        // Facility and client context
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "building.2.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(Color.brandNavy)
+                                Text(tech.companyName ?? "Commercial Client")
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+
+                            HStack(spacing: 6) {
+                                Image(systemName: "mappin.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                Text("\(tech.facilityName ?? "Commercial Site") • \(tech.facilityAddress ?? "Main Plant Room")")
+                                    .font(.appCaption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                        .cornerRadius(8)
+
+                        // Role on active assignment
+                        HStack(spacing: 6) {
+                            if tech.isLeadOnActiveJob == true {
+                                Image(systemName: "shield.fill")
+                                    .foregroundColor(Color.brandNavy)
+                                Text("Lead Technician (In Command)")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(Color.brandNavy)
+                            } else {
+                                Image(systemName: "person.2.fill")
+                                    .foregroundColor(.secondary)
+                                Text("Assigned Crew Technician")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+
                             Spacer()
-                            Text(tech.status.rawValue)
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(tech.status.color)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(tech.status.color.opacity(0.12))
+
+                            if let start = tech.activeWorkOrderScheduledStart {
+                                Text("Shift: \(start.prefix(16))")
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        // Shortcut to view full dispatch
+                        Button(action: {
+                            if let wo = viewModel.workOrders.first(where: {
+                                $0.id == tech.activeWorkOrderId ||
+                                $0.workOrderNumber == tech.activeWorkOrderNumber
+                            }) {
+                                viewModel.selectedWorkOrder = wo
+                                selectedMenu = .activeDispatches
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "arrow.up.right.square.fill")
+                                Text("View Full Dispatch")
+                                    .fontWeight(.bold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.brandNavy)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                        }
+                    }
+                    .padding(16)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .cornerRadius(12)
+                } else {
+                    // Available readiness status
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Label("Dispatch Readiness", systemImage: "clock.badge.checkmark.fill")
+                                .font(.appHeadline)
+                                .foregroundColor(Color.statusAmber)
+
+                            Spacer()
+
+                            Text("Available")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(Color.statusAmber)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.statusAmber.opacity(0.12))
                                 .clipShape(Capsule())
                         }
 
                         Divider()
 
-                        HStack {
-                            Image(systemName: "mappin.circle.fill")
-                                .foregroundColor(.secondary)
-                            Text(tech.lastSeenText)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Technician is Available for Immediate Dispatch")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.primary)
+
+                            Text("Currently on standby at Central Operations Base with no active emergency or scheduled work order assignments.")
                                 .font(.appCaption)
                                 .foregroundColor(.secondary)
+                        }
 
-                            Spacer()
-
-                            Link(destination: URL(string: "tel:\(tech.contactNumber)")!) {
-                                Image(systemName: "phone.circle.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(Color.statusGreen)
+                        Button(action: {
+                            showNewDispatchSheet = true
+                        }) {
+                            HStack {
+                                Image(systemName: "plus.circle.fill")
+                                Text("Assign to New Dispatch")
+                                    .fontWeight(.bold)
                             }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.brandNavy)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
                         }
                     }
-                    .padding(14)
+                    .padding(16)
                     .background(Color(uiColor: .secondarySystemGroupedBackground))
-                    .cornerRadius(10)
+                    .cornerRadius(12)
                 }
             }
             .padding(16)
@@ -1304,7 +1716,7 @@ struct SupervisorCompactView: View {
             .tag(0)
 
             NavigationStack {
-                List(viewModel.technicians) { tech in
+                List(viewModel.filteredTechnicians) { tech in
                     HStack {
                         VStack(alignment: .leading) {
                             Text(tech.name)

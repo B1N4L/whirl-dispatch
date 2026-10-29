@@ -57,15 +57,53 @@ enum ExpenseStatusFilter: String, CaseIterable, Identifiable {
 }
 
 
-struct TechnicianMember: Identifiable, Equatable {
+enum TechnicianStatusFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case onSite = "Active On-site"
+    case available = "Available"
+    case enRoute = "En-route"
+
+    var id: String { rawValue }
+}
+
+
+struct TechnicianMember: Identifiable, Equatable, Hashable {
     let id: String
     let name: String
+    let email: String
+    let role: UserRole
     let roleTitle: String
     var status: TechnicianShiftStatus
-    var assignedWorkOrderTitle: String?
-    var facilityName: String?
+    let hourlyRate: String?
+    let biometricEnrolled: Bool
     let contactNumber: String
     var lastSeenText: String
+
+    // Active dispatched job details (if dispatched)
+    var activeWorkOrderId: String?
+    var activeWorkOrderNumber: String?
+    var activeWorkOrderTitle: String?
+    var activeWorkOrderDescription: String?
+    var activeWorkOrderPriority: String?
+    var activeWorkOrderStatus: String?
+    var activeWorkOrderScheduledStart: String?
+    var activeWorkOrderScheduledEnd: String?
+    var isLeadOnActiveJob: Bool?
+    var companyName: String?
+    var facilityName: String?
+    var facilityAddress: String?
+
+    var assignedWorkOrderTitle: String? {
+        activeWorkOrderTitle ?? activeWorkOrderNumber
+    }
+
+    var isDispatched: Bool {
+        activeWorkOrderId != nil && status != .available
+    }
+
+    var isLeadTechnician: Bool {
+        role == .leadTechnician
+    }
 }
 
 
@@ -76,6 +114,9 @@ final class SupervisorViewModel {
     var selectedWorkOrder: WorkOrder? = nil
     var selectedFilter: WorkOrderFilter = .all
     var technicians: [TechnicianMember] = []
+    var selectedTechnician: TechnicianMember? = nil
+    var technicianStatusFilter: TechnicianStatusFilter = .all
+    var technicianSearchQuery: String = ""
     var technicianItems: [TechnicianItem] = []
     var facilities: [Facility] = []
     var fleetAssets: [FleetAsset] = []
@@ -164,6 +205,36 @@ final class SupervisorViewModel {
         return list
     }
 
+    // filtered technician list across dispatch status and search query
+    var filteredTechnicians: [TechnicianMember] {
+        var list = technicians
+        switch technicianStatusFilter {
+        case .all:
+            break
+        case .onSite:
+            list = list.filter { $0.status == .onSite }
+        case .available:
+            list = list.filter { $0.status == .available }
+        case .enRoute:
+            list = list.filter { $0.status == .enRoute }
+        }
+
+        let query = technicianSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !query.isEmpty {
+            list = list.filter { tech in
+                tech.name.lowercased().contains(query) ||
+                tech.email.lowercased().contains(query) ||
+                tech.roleTitle.lowercased().contains(query) ||
+                (tech.facilityName?.lowercased().contains(query) ?? false) ||
+                (tech.companyName?.lowercased().contains(query) ?? false) ||
+                (tech.activeWorkOrderNumber?.lowercased().contains(query) ?? false) ||
+                (tech.activeWorkOrderTitle?.lowercased().contains(query) ?? false)
+            }
+        }
+
+        return list
+    }
+
     // Available lead technicians for new dispatch assignment
     var availableLeadTechnicians: [TechnicianItem] {
         let leads = technicianItems.filter { $0.role == .leadTechnician && $0.isAvailable }
@@ -234,23 +305,11 @@ final class SupervisorViewModel {
         }
         if let techItems = techsRes?.technicians, !techItems.isEmpty {
             self.technicianItems = techItems
-            self.technicians = techItems.map { item in
-                let shiftStatus: TechnicianShiftStatus
-                switch item.status {
-                case "Active On-Site": shiftStatus = .onSite
-                case "En Route": shiftStatus = .enRoute
-                default: shiftStatus = .available
-                }
-                return TechnicianMember(
-                    id: item.id,
-                    name: item.fullName,
-                    roleTitle: item.role == .leadTechnician ? "Lead Technician" : "Field Technician",
-                    status: shiftStatus,
-                    assignedWorkOrderTitle: item.activeWorkOrderTitle ?? item.activeWorkOrderNumber,
-                    facilityName: item.facilityName ?? "Central Operations Base",
-                    contactNumber: item.phone ?? "+94 77 000 0000",
-                    lastSeenText: item.isAvailable ? "Ready for Dispatch" : (item.facilityName ?? "On Site")
-                )
+            self.technicians = techItems.map(mapTechnicianItem)
+            if let currentId = selectedTechnician?.id, let refreshed = technicians.first(where: { $0.id == currentId }) {
+                self.selectedTechnician = refreshed
+            } else if selectedTechnician == nil {
+                self.selectedTechnician = technicians.first
             }
         }
 
@@ -406,23 +465,11 @@ final class SupervisorViewModel {
             // Refresh technician availability to reflect new active assignment
             if let refreshedTechs: TechniciansResponse = try? await apiService.send(.getTechnicians) {
                 self.technicianItems = refreshedTechs.technicians
-                self.technicians = refreshedTechs.technicians.map { item in
-                    let shiftStatus: TechnicianShiftStatus
-                    switch item.status {
-                    case "Active On-Site": shiftStatus = .onSite
-                    case "En Route": shiftStatus = .enRoute
-                    default: shiftStatus = .available
-                    }
-                    return TechnicianMember(
-                        id: item.id,
-                        name: item.fullName,
-                        roleTitle: item.role == .leadTechnician ? "Lead Technician" : "Field Technician",
-                        status: shiftStatus,
-                        assignedWorkOrderTitle: item.activeWorkOrderTitle ?? item.activeWorkOrderNumber,
-                        facilityName: item.facilityName ?? "Central Operations Base",
-                        contactNumber: item.phone ?? "+94 77 000 0000",
-                        lastSeenText: item.isAvailable ? "Ready for Dispatch" : (item.facilityName ?? "On Site")
-                    )
+                self.technicians = refreshedTechs.technicians.map(mapTechnicianItem)
+                if let currentId = selectedTechnician?.id, let refreshed = technicians.first(where: { $0.id == currentId }) {
+                    self.selectedTechnician = refreshed
+                } else if selectedTechnician == nil {
+                    self.selectedTechnician = technicians.first
                 }
             }
 
@@ -514,49 +561,145 @@ final class SupervisorViewModel {
     }
 
 
+    private func mapTechnicianItem(_ item: TechnicianItem) -> TechnicianMember {
+        let shiftStatus: TechnicianShiftStatus
+        switch item.status {
+        case "Active On-Site": shiftStatus = .onSite
+        case "En Route": shiftStatus = .enRoute
+        default: shiftStatus = .available
+        }
+
+        let rateText = item.hourlyLaborRate != nil ? "$\(item.hourlyLaborRate!)/hr" : "$85.00/hr"
+        let company = item.companyName ?? (item.facilityName != nil ? "Commercial Client" : nil)
+
+        return TechnicianMember(
+            id: item.id,
+            name: item.fullName,
+            email: item.email,
+            role: item.role,
+            roleTitle: item.role == .leadTechnician ? "Lead Technician" : "Field Technician",
+            status: shiftStatus,
+            hourlyRate: rateText,
+            biometricEnrolled: item.biometricEnrolled ?? true,
+            contactNumber: item.phone ?? "+94 77 000 0000",
+            lastSeenText: item.isAvailable ? "Ready for Dispatch" : (item.facilityName ?? "On Site"),
+            activeWorkOrderId: item.activeWorkOrderId,
+            activeWorkOrderNumber: item.activeWorkOrderNumber,
+            activeWorkOrderTitle: item.activeWorkOrderTitle,
+            activeWorkOrderDescription: item.activeWorkOrderDescription,
+            activeWorkOrderPriority: item.activeWorkOrderPriority,
+            activeWorkOrderStatus: item.activeWorkOrderStatus,
+            activeWorkOrderScheduledStart: item.activeWorkOrderScheduledStart,
+            activeWorkOrderScheduledEnd: item.activeWorkOrderScheduledEnd,
+            isLeadOnActiveJob: item.isLeadOnActiveJob,
+            companyName: company,
+            facilityName: item.facilityName ?? (item.isAvailable ? "Central Operations Base" : "Commercial Site"),
+            facilityAddress: item.facilityAddress
+        )
+    }
+
     // initial roster matching coursework scenario
     private func setupInitialTeamRoster() {
         self.technicians = [
             TechnicianMember(
                 id: "tech-01",
                 name: "Nuwan Silva",
+                email: "nuwan.tech@whirldispatch.com",
+                role: .technician,
                 roleTitle: "Senior HVAC Field Tech",
                 status: .onSite,
-                assignedWorkOrderTitle: "WO-2026-4401 - Main Chiller",
-                facilityName: "Metro Commercial Center",
+                hourlyRate: "$90.00/hr",
+                biometricEnrolled: true,
                 contactNumber: "+94 77 123 4567",
-                lastSeenText: "Plant Room B2 (5m ago)"
+                lastSeenText: "Plant Room B2 (5m ago)",
+                activeWorkOrderId: "wo-mock-01",
+                activeWorkOrderNumber: "WO-2026-4401",
+                activeWorkOrderTitle: "Main Chiller Compressor Overhaul",
+                activeWorkOrderDescription: "High-pressure centrifugal chiller stage 2 diagnostics and refrigerant line seal restoration.",
+                activeWorkOrderPriority: "CRITICAL_EMERGENCY",
+                activeWorkOrderStatus: "ON_SITE_ACTIVE",
+                activeWorkOrderScheduledStart: "2026-10-29T08:00:00Z",
+                activeWorkOrderScheduledEnd: "2026-10-29T16:00:00Z",
+                isLeadOnActiveJob: false,
+                companyName: "Commercial Retail REIT",
+                facilityName: "Metro Commercial Center",
+                facilityAddress: "No. 12 Galle Road, Colombo 03"
             ),
             TechnicianMember(
                 id: "tech-02",
                 name: "Kasun Perera",
+                email: "kasun.lead@whirldispatch.com",
+                role: .leadTechnician,
                 roleTitle: "Lead Technician",
                 status: .enRoute,
-                assignedWorkOrderTitle: "WO-2026-4402 - Rooftop AHU",
-                facilityName: "Apex Healthcare Tower",
+                hourlyRate: "$105.00/hr",
+                biometricEnrolled: true,
                 contactNumber: "+94 71 987 6543",
-                lastSeenText: "En Route on Baseline Rd"
+                lastSeenText: "En Route on Baseline Rd",
+                activeWorkOrderId: "wo-mock-02",
+                activeWorkOrderNumber: "WO-2026-4402",
+                activeWorkOrderTitle: "Rooftop AHU Filter Replacement",
+                activeWorkOrderDescription: "Cleanroom grade HEPA filtration replenishment and airflow damper recalibration.",
+                activeWorkOrderPriority: "STANDARD",
+                activeWorkOrderStatus: "EN_ROUTE",
+                activeWorkOrderScheduledStart: "2026-10-29T10:00:00Z",
+                activeWorkOrderScheduledEnd: "2026-10-29T15:00:00Z",
+                isLeadOnActiveJob: true,
+                companyName: "Apex Medical Holdings",
+                facilityName: "Apex Healthcare Tower",
+                facilityAddress: "45 Baseline Road, Colombo 08"
             ),
             TechnicianMember(
                 id: "tech-03",
                 name: "Dinesh Fernando",
+                email: "dinesh.tech@whirldispatch.com",
+                role: .technician,
                 roleTitle: "Field Technician",
                 status: .available,
-                assignedWorkOrderTitle: nil,
-                facilityName: "Central Operations Base",
+                hourlyRate: "$85.00/hr",
+                biometricEnrolled: true,
                 contactNumber: "+94 76 555 1212",
-                lastSeenText: "Ready for Dispatch"
+                lastSeenText: "Ready for Dispatch",
+                activeWorkOrderId: nil,
+                activeWorkOrderNumber: nil,
+                activeWorkOrderTitle: nil,
+                activeWorkOrderDescription: nil,
+                activeWorkOrderPriority: nil,
+                activeWorkOrderStatus: nil,
+                activeWorkOrderScheduledStart: nil,
+                activeWorkOrderScheduledEnd: nil,
+                isLeadOnActiveJob: nil,
+                companyName: nil,
+                facilityName: "Central Operations Base",
+                facilityAddress: "HQ Dispatch Bay 3, Colombo 01"
             ),
             TechnicianMember(
                 id: "tech-04",
                 name: "Malik Jayasuriya",
+                email: "malik.tech@whirldispatch.com",
+                role: .technician,
                 roleTitle: "Apprentice Tech",
                 status: .onSite,
-                assignedWorkOrderTitle: "WO-2026-4401 - Main Chiller",
-                facilityName: "Metro Commercial Center",
+                hourlyRate: "$65.00/hr",
+                biometricEnrolled: true,
                 contactNumber: "+94 70 444 8989",
-                lastSeenText: "Plant Room B2"
+                lastSeenText: "Plant Room B2",
+                activeWorkOrderId: "wo-mock-01",
+                activeWorkOrderNumber: "WO-2026-4401",
+                activeWorkOrderTitle: "Main Chiller Compressor Overhaul",
+                activeWorkOrderDescription: "High-pressure centrifugal chiller stage 2 diagnostics and refrigerant line seal restoration.",
+                activeWorkOrderPriority: "CRITICAL_EMERGENCY",
+                activeWorkOrderStatus: "ON_SITE_ACTIVE",
+                activeWorkOrderScheduledStart: "2026-10-29T08:00:00Z",
+                activeWorkOrderScheduledEnd: "2026-10-29T16:00:00Z",
+                isLeadOnActiveJob: false,
+                companyName: "Commercial Retail REIT",
+                facilityName: "Metro Commercial Center",
+                facilityAddress: "No. 12 Galle Road, Colombo 03"
             )
         ]
+        if selectedTechnician == nil {
+            self.selectedTechnician = technicians.first
+        }
     }
 }
