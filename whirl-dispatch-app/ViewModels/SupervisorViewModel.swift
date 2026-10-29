@@ -47,6 +47,16 @@ enum FleetMapFilter: String, CaseIterable, Identifiable {
 }
 
 
+enum ExpenseStatusFilter: String, CaseIterable, Identifiable {
+    case all = "All History"
+    case pending = "Pending"
+    case approved = "Approved"
+    case rejected = "Rejected"
+
+    var id: String { rawValue }
+}
+
+
 struct TechnicianMember: Identifiable, Equatable {
     let id: String
     let name: String
@@ -71,6 +81,8 @@ final class SupervisorViewModel {
     var fleetAssets: [FleetAsset] = []
     var pendingExpenses: [ExpenseClaim] = []
     var selectedExpense: ExpenseClaim? = nil
+    var expenseStatusFilter: ExpenseStatusFilter = .all
+    var expenseSearchQuery: String = ""
 
     // live fleet map tracking
     var trackedSites: [TrackedSite] = []
@@ -116,6 +128,36 @@ final class SupervisorViewModel {
                 site.workOrderNumber.lowercased().contains(query) ||
                 (site.team.leadTechnician?.fullName.lowercased().contains(query) ?? false) ||
                 (site.vehicle?.licensePlate.lowercased().contains(query) ?? false)
+            }
+        }
+
+        return list
+    }
+
+    // filtered expense list across all client companies
+    var filteredExpenses: [ExpenseClaim] {
+        var list = pendingExpenses
+        switch expenseStatusFilter {
+        case .all:
+            break
+        case .pending:
+            list = list.filter { $0.approvalStatus == .pending }
+        case .approved:
+            list = list.filter { $0.approvalStatus == .approved }
+        case .rejected:
+            list = list.filter { $0.approvalStatus == .rejected }
+        }
+
+        let query = expenseSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !query.isEmpty {
+            list = list.filter { claim in
+                claim.vendorName.lowercased().contains(query) ||
+                (claim.receiptNumber?.lowercased().contains(query) ?? false) ||
+                claim.clientCompanyName.lowercased().contains(query) ||
+                claim.facilityDisplayName.lowercased().contains(query) ||
+                claim.dispatchCode.lowercased().contains(query) ||
+                (claim.rejectionReason?.lowercased().contains(query) ?? false) ||
+                (claim.items?.contains(where: { $0.partDescription.lowercased().contains(query) }) ?? false)
             }
         }
 
@@ -300,7 +342,9 @@ final class SupervisorViewModel {
         }
 
         self.pendingExpenses = unique
-        if selectedExpense == nil {
+        if let currentId = selectedExpense?.id, let refreshed = unique.first(where: { $0.id == currentId }) {
+            self.selectedExpense = refreshed
+        } else if selectedExpense == nil {
             self.selectedExpense = unique.first(where: { $0.approvalStatus == .pending }) ?? unique.first
         }
 
@@ -429,11 +473,21 @@ final class SupervisorViewModel {
             )
 
             // update claim in array
+            var updatedClaim = res.claim
+            if (updatedClaim.items == nil || updatedClaim.items?.isEmpty == true),
+               let existingItems = pendingExpenses.first(where: { $0.id == claimId })?.items {
+                updatedClaim.items = existingItems
+            }
+            if updatedClaim.workOrder == nil,
+               let existingWorkOrder = pendingExpenses.first(where: { $0.id == claimId })?.workOrder {
+                updatedClaim.workOrder = existingWorkOrder
+            }
+
             if let idx = pendingExpenses.firstIndex(where: { $0.id == claimId }) {
-                pendingExpenses[idx] = res.claim
+                pendingExpenses[idx] = updatedClaim
             }
             if selectedExpense?.id == claimId {
-                selectedExpense = res.claim
+                selectedExpense = updatedClaim
             }
 
             successToast = status == .approved ? "Expense claim approved." : "Expense claim flagged and rejected."

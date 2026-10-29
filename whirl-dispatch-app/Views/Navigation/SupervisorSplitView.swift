@@ -289,52 +289,180 @@ struct SupervisorSplitView: View {
     }
 
     private var expenseApprovalsContentList: some View {
-        List(viewModel.pendingExpenses, selection: $viewModel.selectedExpense) { claim in
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(claim.vendorName)
-                            .font(.appHeadline)
-                            .foregroundColor(.primary)
-
-                        Text(claim.receiptNumber ?? "No Receipt #")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundColor(.secondary)
-                    }
-
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 3) {
-                        Text(claim.formattedAmount)
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(Color.brandNavy)
-
-                        Text(claim.approvalStatus.label)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(claim.approvalStatus.color)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(claim.approvalStatus.color.opacity(0.12))
-                            .clipShape(Capsule())
-                    }
+        VStack(spacing: 0) {
+            // Action header on top
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Expense Ledger")
+                        .font(.appSubheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(Color.brandNavy)
+                    Text("\(viewModel.filteredExpenses.count) Claims across all facilities")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
 
-                if claim.isThresholdExceeded == true {
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.shield.fill")
-                            .font(.system(size: 10))
-                        Text("Optical Inspection Required (>$250)")
-                            .font(.system(size: 10, weight: .semibold))
-                    }
-                    .foregroundColor(Color.statusAmber)
+                Spacer()
+
+                if viewModel.isLoading {
+                    ProgressView()
+                        .scaleEffect(0.8)
                 }
             }
-            .padding(.vertical, 4)
-            .tag(claim)
-        }
-        .listStyle(.plain)
-        .refreshable {
-            await viewModel.loadSupervisorData()
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+
+            // Status filter segmented control
+            Picker("Filter by Status", selection: $viewModel.expenseStatusFilter) {
+                ForEach(ExpenseStatusFilter.allCases) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+
+            // Search bar
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+                TextField("Search company, vendor, receipt, code...", text: $viewModel.expenseSearchQuery)
+                    .font(.caption)
+                    .textFieldStyle(.plain)
+                if !viewModel.expenseSearchQuery.isEmpty {
+                    Button {
+                        viewModel.expenseSearchQuery = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                    }
+                }
+            }
+            .padding(7)
+            .background(Color(uiColor: .secondarySystemGroupedBackground))
+            .cornerRadius(8)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 8)
+
+            Divider()
+
+            if viewModel.filteredExpenses.isEmpty {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 36))
+                        .foregroundColor(.secondary)
+                    Text("No Expenses Found")
+                        .font(.appHeadline)
+                        .foregroundColor(.primary)
+                    Text(viewModel.expenseSearchQuery.isEmpty
+                         ? "No expense records matching the '\(viewModel.expenseStatusFilter.rawValue)' filter."
+                         : "No records found for '\(viewModel.expenseSearchQuery)'.")
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(viewModel.filteredExpenses, selection: $viewModel.selectedExpense) { claim in
+                    VStack(alignment: .leading, spacing: 6) {
+                        // Company name and status badge
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(claim.clientCompanyName)
+                                    .font(.appHeadline)
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+
+                                Text(claim.facilityDisplayName)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            VStack(alignment: .trailing, spacing: 3) {
+                                Text(claim.formattedAmount)
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundColor(Color.brandNavy)
+
+                                Text(claim.approvalStatus.label)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(claim.approvalStatus.color)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(claim.approvalStatus.color.opacity(0.12))
+                                    .clipShape(Capsule())
+                            }
+                        }
+
+                        // Vendor, invoice number and dispatch code
+                        HStack(spacing: 6) {
+                            Text(claim.vendorName)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+
+                            Text("•")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+
+                            Text(claim.receiptNumber ?? "No Receipt #")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.secondary)
+
+                            Spacer()
+
+                            Text(claim.dispatchCode)
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Color.brandNavy.opacity(0.08))
+                                .foregroundColor(Color.brandNavy)
+                                .cornerRadius(4)
+                        }
+
+                        // Inspection warning if threshold exceeded
+                        if claim.isThresholdExceeded == true {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.shield.fill")
+                                    .font(.system(size: 10))
+                                Text("Optical Inspection Required (>$250)")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .foregroundColor(Color.statusAmber)
+                        }
+
+                        // Rejection reason snippet if rejected
+                        if claim.approvalStatus == .rejected, let reason = claim.rejectionReason, !reason.isEmpty {
+                            HStack(spacing: 4) {
+                                Image(systemName: "xmark.circle")
+                                    .font(.system(size: 10))
+                                Text("Reason: \(reason)")
+                                    .font(.system(size: 10))
+                                    .lineLimit(1)
+                            }
+                            .foregroundColor(Color.statusRed)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        viewModel.selectedExpense = claim
+                    }
+                    .tag(claim)
+                }
+                .listStyle(.plain)
+                .refreshable {
+                    await viewModel.loadSupervisorData()
+                }
+            }
         }
     }
 
@@ -682,6 +810,37 @@ struct SupervisorSplitView: View {
     private func opticalExpenseDetailPane(_ claim: ExpenseClaim) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                // client company and facility header
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Image(systemName: "building.2.fill")
+                            .foregroundColor(Color.brandNavy)
+                        Text(claim.clientCompanyName)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(Color.brandNavy)
+                        Spacer()
+                        Text(claim.dispatchCode)
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.brandNavy.opacity(0.1))
+                            .foregroundColor(Color.brandNavy)
+                            .cornerRadius(6)
+                    }
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        Text(claim.facilityDisplayName)
+                            .font(.appSubheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(14)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
                 // top header card
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -720,6 +879,60 @@ struct SupervisorSplitView: View {
                 .padding(16)
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .cornerRadius(12)
+
+                // status guidance banner
+                if claim.approvalStatus == .approved {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .foregroundColor(Color.statusGreen)
+                            Text("Approved by Supervisor")
+                                .font(.appSubheadline)
+                                .fontWeight(.bold)
+                                .foregroundColor(Color.statusGreen)
+                        }
+
+                        Text("This expense claim has been approved and logged for commercial billing. You can modify this decision below at any time.")
+                            .font(.appCaption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(14)
+                    .background(Color.statusGreen.opacity(0.08))
+                    .cornerRadius(10)
+                } else if claim.approvalStatus == .rejected {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "xmark.seal.fill")
+                                .foregroundColor(Color.statusRed)
+                            Text("Flagged & Rejected by Supervisor")
+                                .font(.appSubheadline)
+                                .fontWeight(.bold)
+                                .foregroundColor(Color.statusRed)
+                        }
+
+                        Text(claim.rejectionReason ?? "Part not authorized for this dispatch or duplicate receipt.")
+                            .font(.appBody)
+                            .foregroundColor(.primary)
+
+                        Text("You can overturn this rejection and approve the expense claim below if supporting documentation was verified.")
+                            .font(.appCaption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(14)
+                    .background(Color.statusRed.opacity(0.08))
+                    .cornerRadius(10)
+                } else {
+                    HStack(spacing: 8) {
+                        Image(systemName: "clock.fill")
+                            .foregroundColor(Color.statusAmber)
+                        Text("Pending Supervisor Review: Verify OCR items against dispatch scope and take action below.")
+                            .font(.appCaption)
+                            .foregroundColor(Color.statusAmber)
+                    }
+                    .padding(12)
+                    .background(Color.statusAmber.opacity(0.1))
+                    .cornerRadius(8)
+                }
 
                 // optical receipt simulation ticket
                 VStack(alignment: .leading, spacing: 12) {
@@ -827,38 +1040,17 @@ struct SupervisorSplitView: View {
                     .cornerRadius(10)
                 }
 
-                // rejection reason note if flagged
-                if claim.approvalStatus == .rejected {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "xmark.seal.fill")
-                                .foregroundColor(Color.statusRed)
-                            Text("Flagged & Rejected by Supervisor")
-                                .font(.appSubheadline)
-                                .fontWeight(.bold)
-                                .foregroundColor(Color.statusRed)
-                        }
-
-                        Text(claim.rejectionReason ?? "Part not authorized for this dispatch or duplicate receipt.")
-                            .font(.appBody)
-                            .foregroundColor(.primary)
-                    }
-                    .padding(14)
-                    .background(Color.statusRed.opacity(0.08))
-                    .cornerRadius(10)
-                }
-
                 // supervisor action controls
                 VStack(spacing: 12) {
                     HStack(spacing: 14) {
                         Button(action: {
                             claimToReject = claim
-                            rejectionReasonInput = ""
+                            rejectionReasonInput = claim.rejectionReason ?? ""
                             showRejectSheet = true
                         }) {
                             HStack {
                                 Image(systemName: "xmark.circle.fill")
-                                Text("Flag / Reject")
+                                Text(claim.approvalStatus == .rejected ? "Update Rejection" : "Flag / Reject")
                                     .fontWeight(.semibold)
                             }
                             .frame(maxWidth: .infinity)
@@ -866,6 +1058,10 @@ struct SupervisorSplitView: View {
                             .background(Color.statusRed.opacity(0.12))
                             .foregroundColor(Color.statusRed)
                             .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(claim.approvalStatus == .rejected ? Color.statusRed : Color.clear, lineWidth: 1.5)
+                            )
                         }
 
                         Button(action: {
@@ -877,12 +1073,12 @@ struct SupervisorSplitView: View {
                         }) {
                             HStack {
                                 Image(systemName: "checkmark.seal.fill")
-                                Text("Approve Expense")
+                                Text(claim.approvalStatus == .approved ? "Approved" : "Approve Expense")
                                     .fontWeight(.bold)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(Color.statusGreen)
+                            .background(claim.approvalStatus == .approved ? Color.statusGreen : Color.brandNavy)
                             .foregroundColor(.white)
                             .cornerRadius(10)
                         }
@@ -1132,10 +1328,10 @@ struct SupervisorCompactView: View {
             .tag(1)
 
             NavigationStack {
-                List(viewModel.pendingExpenses) { claim in
+                List(viewModel.filteredExpenses) { claim in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(claim.vendorName)
+                            Text(claim.clientCompanyName)
                                 .font(.appHeadline)
                             Spacer()
                             Text(claim.formattedAmount)
@@ -1143,7 +1339,7 @@ struct SupervisorCompactView: View {
                                 .foregroundColor(Color.brandNavy)
                         }
                         HStack {
-                            Text(claim.approvalStatus.label)
+                            Text("\(claim.vendorName) • \(claim.approvalStatus.label)")
                                 .font(.caption2)
                                 .foregroundColor(claim.approvalStatus.color)
                             Spacer()

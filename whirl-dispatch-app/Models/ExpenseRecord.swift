@@ -130,6 +130,20 @@ struct ExpenseItem: Identifiable, Codable, Equatable, Hashable {
 }
 
 
+struct ExpenseFacilitySummary: Codable, Equatable, Hashable {
+    let id: String
+    let companyName: String
+    let facilityName: String
+    let address: String?
+}
+
+struct ExpenseWorkOrderSummary: Codable, Equatable, Hashable {
+    let id: String
+    let workOrderNumber: String
+    let title: String
+    let facility: ExpenseFacilitySummary?
+}
+
 struct ExpenseClaim: Identifiable, Codable, Equatable, Hashable {
     let id: String
     let workOrderId: String
@@ -148,12 +162,14 @@ struct ExpenseClaim: Identifiable, Codable, Equatable, Hashable {
     var reviewedAt: String?
     var rejectionReason: String?
     var items: [ExpenseItem]?
+    var workOrder: ExpenseWorkOrderSummary?
 
     enum CodingKeys: String, CodingKey {
         case id, workOrderId, leadTechnicianId, vendorName, receiptNumber
         case totalAmount, currency, receiptImageUrl, receiptStoreLatitude
         case receiptStoreLongitude, receiptCapturedAt, isThresholdExceeded
         case approvalStatus, reviewedBySupervisorId, reviewedAt, rejectionReason, items
+        case workOrder
     }
 
     init(
@@ -173,7 +189,8 @@ struct ExpenseClaim: Identifiable, Codable, Equatable, Hashable {
         reviewedBySupervisorId: String? = nil,
         reviewedAt: String? = nil,
         rejectionReason: String? = nil,
-        items: [ExpenseItem]? = nil
+        items: [ExpenseItem]? = nil,
+        workOrder: ExpenseWorkOrderSummary? = nil
     ) {
         self.id = id
         self.workOrderId = workOrderId
@@ -192,6 +209,7 @@ struct ExpenseClaim: Identifiable, Codable, Equatable, Hashable {
         self.reviewedAt = reviewedAt
         self.rejectionReason = rejectionReason
         self.items = items
+        self.workOrder = workOrder
     }
 
     init(from decoder: Decoder) throws {
@@ -224,6 +242,7 @@ struct ExpenseClaim: Identifiable, Codable, Equatable, Hashable {
         reviewedAt = try container.decodeIfPresent(String.self, forKey: .reviewedAt)
         rejectionReason = try container.decodeIfPresent(String.self, forKey: .rejectionReason)
         items = try container.decodeIfPresent([ExpenseItem].self, forKey: .items)
+        workOrder = try container.decodeIfPresent(ExpenseWorkOrderSummary.self, forKey: .workOrder)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -245,6 +264,19 @@ struct ExpenseClaim: Identifiable, Codable, Equatable, Hashable {
         try container.encodeIfPresent(reviewedAt, forKey: .reviewedAt)
         try container.encodeIfPresent(rejectionReason, forKey: .rejectionReason)
         try container.encodeIfPresent(items, forKey: .items)
+        try container.encodeIfPresent(workOrder, forKey: .workOrder)
+    }
+
+    var clientCompanyName: String {
+        workOrder?.facility?.companyName ?? "Commercial Client"
+    }
+
+    var facilityDisplayName: String {
+        workOrder?.facility?.facilityName ?? "Regional Facility"
+    }
+
+    var dispatchCode: String {
+        workOrder?.workOrderNumber ?? "WO-\(workOrderId.prefix(8).uppercased())"
     }
 
     var supplierName: String {
