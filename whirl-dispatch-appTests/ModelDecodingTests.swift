@@ -198,67 +198,6 @@ struct ModelDecodingTests {
     }
 
 
-    @Test func testDiagnosticDossierDecodingWithChecklistItems() throws {
-        let json = """
-        {
-            "id": "dos-77",
-            "workOrderId": "wo-test-404",
-            "leadTechnicianId": "tech-lead-02",
-            "equipmentModel": "Carrier AquaSnap 30MP",
-            "equipmentSerialNumber": "SN-2024-CHIL-8849",
-            "baselineSuctionPressurePsi": "68.5",
-            "postServiceSuctionPressurePsi": "72.0",
-            "baselineDischargePressurePsi": "245.0",
-            "postServiceDischargePressurePsi": "220.0",
-            "baselineMotorRunningAmps": "18.2",
-            "postServiceMotorRunningAmps": "15.4",
-            "technicianNotes": "Coil micro-channels straightened, refrigerant topped up.",
-            "supervisorReviewNotes": null,
-            "isWorkApproved": true,
-            "checklist": [
-                {
-                    "id": "chk-01",
-                    "category": "COMPRESSOR_SYSTEM",
-                    "itemLabel": "Inspect compressor oil sight glass",
-                    "isChecked": true,
-                    "notes": "Clear, 3/4 level"
-                },
-                {
-                    "id": "chk-04",
-                    "category": "REFRIGERANT_CIRCUIT",
-                    "itemLabel": "Halogen leak detector scan on schrader valves",
-                    "isChecked": true,
-                    "notes": null
-                }
-            ],
-            "photos": [
-                {
-                    "id": "pho-01",
-                    "diagnosticDossierId": "dos-77",
-                    "photoType": "BASELINE_BEFORE",
-                    "photoUrl": "https://storage.whirldispatch.com/proof-01.jpg",
-                    "capturedTimestamp": "2026-10-26T10:15:00Z",
-                    "latitude": 6.9344,
-                    "longitude": 79.8428
-                }
-            ]
-        }
-        """.data(using: .utf8)!
-
-        let dossier = try JSONDecoder().decode(DiagnosticDossier.self, from: json)
-
-        #expect(dossier.id == "dos-77")
-        #expect(dossier.equipmentModel == "Carrier AquaSnap 30MP")
-        #expect(dossier.baselineSuctionPressurePsi == "68.5")
-        #expect(dossier.postServiceSuctionPressurePsi == "72.0")
-        #expect(dossier.isWorkApproved == true)
-        #expect(dossier.checklist?.count == 2)
-        #expect(dossier.checklist?.first?.category == .compressor)
-        #expect(dossier.photos?.count == 1)
-        #expect(dossier.photos?.first?.photoType == .baselineBefore)
-    }
-
-
     @Test func testExpenseClaimDecodingAndApprovalStatus() throws {
         let json = """
         {

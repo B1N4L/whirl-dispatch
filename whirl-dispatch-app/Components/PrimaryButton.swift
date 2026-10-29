@@ -64,7 +64,7 @@ struct PrimaryButton: View {
 #Preview {
     VStack(spacing: 16) {
         PrimaryButton(title: "Clock In to Site", icon: "location.fill") {}
-        PrimaryButton(title: "Submitting Dossier", isLoading: true) {}
+        PrimaryButton(title: "Saving Changes", isLoading: true) {}
         PrimaryButton(title: "Disabled Button", isEnabled: false) {}
     }
     .padding()

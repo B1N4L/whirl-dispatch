@@ -15,7 +15,6 @@ struct WorkOrderDetailView: View {
     @State private var isPerformingTransition = false
     @State private var showingCompleteAlert = false
     @State private var showingRestrictionAlert = false
-    @State private var showingDossierSheet = false
     @State private var actionErrorMessage: String? = nil
     @State private var offlineManager = OfflineModeManager.shared
     @State private var calendarSyncService = CalendarSyncService.shared
@@ -99,7 +98,7 @@ struct WorkOrderDetailView: View {
                         .fontWeight(.bold)
                         .foregroundColor(.secondary)
 
-                    Text(order.description.isEmpty ? "No special diagnostic instructions provided." : order.description)
+                    Text(order.description.isEmpty ? "No special work order instructions provided." : order.description)
                         .font(.appBody)
                         .foregroundColor(.primary)
                         .padding(14)
@@ -211,49 +210,6 @@ struct WorkOrderDetailView: View {
                 .padding(.horizontal, 16)
 
 
-                // diagnostic machinery dossier & proof button
-                VStack(spacing: 8) {
-                    Button(action: {
-                        showingDossierSheet = true
-                    }) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "doc.text.image.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(Color.brandNavy)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Diagnostic Machinery Dossier")
-                                    .font(.appHeadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.primary)
-
-                                Text("Record HVAC pressures, motor amps & diagnostic photos")
-                                    .font(.appCaption)
-                                    .foregroundColor(.secondary)
-                            }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(Color.cardBackground)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.surfaceBorder, lineWidth: 1)
-                        )
-                        .accessibilityLabel("Diagnostic Machinery Dossier")
-                        .accessibilityHint("Double tap to inspect HVAC baseline metrics and capture damage photos.")
-                    }
-                }
-                .padding(.horizontal, 16)
-
-
                 // native ios calendar sync card
                 calendarSyncCard
 
@@ -343,15 +299,12 @@ struct WorkOrderDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Confirm that all mechanical diagnostic checks and plant room cleaning are done.")
+            Text("Confirm that all mechanical work and plant room cleaning are done.")
         }
         .alert("Offline Mode Restricted", isPresented: $showingRestrictionAlert) {
             Button("Understood", role: .cancel) {}
         } message: {
             Text(offlineManager.restrictionErrorMessage ?? "You cannot enable offline mode outside the workplace site. You must arrive and clock in on-site first.")
-        }
-        .sheet(isPresented: $showingDossierSheet) {
-            DiagnosticDossierView(workOrder: order)
         }
     }
 

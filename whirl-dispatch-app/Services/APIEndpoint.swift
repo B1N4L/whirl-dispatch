@@ -42,8 +42,6 @@ enum APIEndpoint {
     case getInvoice(id: String)
     case updateInvoiceStatus(id: String, status: String)
     case getBillingInvoices
-    case getDossier(workOrderId: String)
-    case saveDossier(workOrderId: String, payload: [String: Any])
     case getTechnicians
     case createWorkOrder(
         clientFacilityId: String,
@@ -86,8 +84,6 @@ enum APIEndpoint {
         case .getInvoice(let id): return "/billing/invoices/\(id)"
         case .updateInvoiceStatus(let id, _): return "/billing/invoices/\(id)/status"
         case .getBillingInvoices: return "/billing"
-        case .getDossier(let workOrderId): return "/dossiers/work-order/\(workOrderId)"
-        case .saveDossier: return "/dossiers"
         case .getTechnicians: return "/users/technicians"
         case .createWorkOrder: return "/work-orders"
         case .updateProfile: return "/auth/profile"
@@ -99,9 +95,9 @@ enum APIEndpoint {
 
     var method: HTTPMethod {
         switch self {
-        case .health, .getFacilities, .getFleet, .getFleetTracking, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getExpensesByWorkOrder, .getBillingInvoices, .getInvoice, .getDossier, .getAttendanceHistory, .getCurrentAttendance, .getTechnicians, .getEstimatePreview, .getTeamTelemetry:
+        case .health, .getFacilities, .getFleet, .getFleetTracking, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getExpensesByWorkOrder, .getBillingInvoices, .getInvoice, .getAttendanceHistory, .getCurrentAttendance, .getTechnicians, .getEstimatePreview, .getTeamTelemetry:
             return .get
-        case .login, .clockIn, .clockOut, .pauseBreak, .submitExpense, .generateEstimate, .saveDossier, .createWorkOrder, .changePassword, .sendTelemetry:
+        case .login, .clockIn, .clockOut, .pauseBreak, .submitExpense, .generateEstimate, .createWorkOrder, .changePassword, .sendTelemetry:
             return .post
         case .updateWorkOrderStatus, .approveExpense, .updateInvoiceStatus, .updateProfile:
             return .patch
@@ -198,9 +194,6 @@ enum APIEndpoint {
               let body: [String: Any] = ["partsMarkupPercent": markup]
               request.httpBody = try? JSONSerialization.data(withJSONObject: body)
           }
-
-      case .saveDossier(_, let payload):
-          request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
 
       case .createWorkOrder(
           let clientFacilityId,
