@@ -34,6 +34,9 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, @unchecked Sen
         self.clManager.distanceFilter = 5.0
         self.authorizationStatus = clManager.authorizationStatus
         self.isLocationAuthorized = (authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways)
+        if self.isLocationAuthorized {
+            self.clManager.startUpdatingLocation()
+        }
     }
 
 
@@ -44,6 +47,9 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, @unchecked Sen
 
     // start streaming location
     func startUpdating() {
+        if authorizationStatus == .notDetermined {
+            clManager.requestWhenInUseAuthorization()
+        }
         clManager.startUpdatingLocation()
     }
 
@@ -52,6 +58,10 @@ final class LocationManager: NSObject, CLLocationManagerDelegate, @unchecked Sen
         clManager.stopUpdatingLocation()
     }
 
+
+    var isUsingFallbackLocation: Bool {
+        !isSimulatedLocationActive && currentCoordinate == nil
+    }
 
     // effective coordinates (simulated or real GPS)
     var effectiveCoordinate: CLLocationCoordinate2D {

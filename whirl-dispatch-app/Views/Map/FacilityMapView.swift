@@ -75,13 +75,14 @@ struct FacilityMapView: View {
                 }
                 .mapStyle(mapStyleSelection == 0 ? .standard(elevation: .realistic) : .hybrid(elevation: .realistic))
                 .mapControls {
+                    MapUserLocationButton()
                     MapCompass()
                     MapScaleView()
                 }
 
                 // top map style picker overlay
                 VStack {
-                    HStack {
+                    HStack(spacing: 8) {
                         Picker("Map Style", selection: $mapStyleSelection) {
                             Text("Standard").tag(0)
                             Text("Satellite").tag(1)
@@ -95,6 +96,27 @@ struct FacilityMapView: View {
                         .padding(.leading, 16)
 
                         Spacer()
+
+                        // center on supervisor location button
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.6)) {
+                                cameraPosition = .region(
+                                    MKCoordinateRegion(
+                                        center: locationManager.effectiveCoordinate,
+                                        span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
+                                    )
+                                )
+                            }
+                        }) {
+                            Image(systemName: "location.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(Color.brandNavy)
+                                .padding(10)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                        }
+                        .padding(.top, 8)
+                        .accessibilityLabel("Center on My Location")
 
                         // refresh button
                         Button(action: {
@@ -111,6 +133,24 @@ struct FacilityMapView: View {
                         .padding(.top, 8)
                         .padding(.trailing, 16)
                     }
+
+                    if locationManager.isUsingFallbackLocation {
+                        HStack(spacing: 6) {
+                            Image(systemName: "info.circle.fill")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("Simulator Location: Default Hub (Colombo). Configure in Simulator > Features > Location.")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(8)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 4)
+                    }
+
                     Spacer()
                 }
 
@@ -420,14 +460,25 @@ struct FacilityMapView: View {
     }
 
     private var technicianLiveMarker: some View {
-        ZStack {
-            Circle()
-                .fill(Color.statusGreen.opacity(0.25))
-                .frame(width: 32, height: 32)
-            Circle()
-                .fill(Color.statusGreen)
-                .frame(width: 14, height: 14)
-                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+        VStack(spacing: 3) {
+            ZStack {
+                Circle()
+                    .fill(Color.brandNavy.opacity(0.2))
+                    .frame(width: 30, height: 30)
+                Circle()
+                    .fill(Color.brandNavy)
+                    .frame(width: 14, height: 14)
+                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+            }
+
+            Text("Supervisor (You)")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(.primary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(.ultraThinMaterial)
+                .cornerRadius(4)
+                .shadow(radius: 1)
         }
     }
 
