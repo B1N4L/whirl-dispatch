@@ -122,4 +122,5 @@ struct EstimateResponse: Codable {
 struct EstimatePreviewResponse: Codable {
     let calculation: BillingCalculationResult
     let existingInvoice: BillingInvoice?
+    var approvedExpenses: [ExpenseClaim]?
 }

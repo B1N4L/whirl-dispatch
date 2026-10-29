@@ -310,8 +310,25 @@ struct ClerkSplitView: View {
                     .cornerRadius(8)
                 }
 
-                // In-Progress Dispatch Restriction Banner
-                if !viewModel.canBillSelectedOrder {
+                // Top Invoicing Status Restriction Banners
+                if viewModel.isOrderAlreadyBilled {
+                    HStack(spacing: 8) {
+                        Image(systemName: "lock.shield.fill")
+                            .foregroundColor(Color.statusGreen)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Invoice Finalized & Billed")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(Color.statusGreen)
+                            Text("Invoicing parameters are locked and cannot be edited.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(12)
+                    .background(Color.statusGreen.opacity(0.12))
+                    .cornerRadius(8)
+                } else if !viewModel.canBillSelectedOrder {
                     HStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundColor(Color.statusAmber)
@@ -494,10 +511,104 @@ struct ClerkSplitView: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .cornerRadius(12)
 
-                // 2. parts & markup calculation card (with interactive slider)
+                // 2. Supervisor-Approved Field Expenses (Technician parts brief for clerk inspection)
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .center) {
+                        Label("Supervisor-Approved Field Expenses", systemImage: "checkmark.seal.fill")
+                            .font(.appHeadline)
+                            .foregroundColor(Color.brandNavy)
+
+                        Spacer()
+
+                        Text(viewModel.formattedPartsSubtotal)
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundColor(Color.brandNavy)
+                    }
+
+                    Text("Wholesale parts and materials logged by field technicians and approved by the supervisor for this dispatch.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+
+                    Divider()
+
+                    if viewModel.selectedOrderApprovedExpenses.isEmpty {
+                        HStack(spacing: 8) {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(.secondary)
+                            Text("No field parts expenses logged for this dispatch.")
+                                .font(.appCaption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 8)
+                    } else {
+                        VStack(spacing: 10) {
+                            ForEach(viewModel.selectedOrderApprovedExpenses) { claim in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Text(claim.vendorName)
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(.primary)
+
+                                        Spacer()
+
+                                        Text(claim.formattedAmount)
+                                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                            .foregroundColor(Color.statusGreen)
+                                    }
+
+                                    HStack(spacing: 8) {
+                                        if let receipt = claim.receiptNumber {
+                                            Text("Receipt: \(receipt)")
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+
+                                        Spacer()
+
+                                        Text("Supervisor Approved")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.statusGreen.opacity(0.12))
+                                            .foregroundColor(Color.statusGreen)
+                                            .cornerRadius(4)
+                                    }
+
+                                    if let items = claim.items, !items.isEmpty {
+                                        VStack(spacing: 4) {
+                                            ForEach(items) { item in
+                                                HStack {
+                                                    Text("\(item.quantity)x \(item.partDescription)")
+                                                        .font(.system(size: 11))
+                                                        .foregroundColor(.secondary)
+                                                        .lineLimit(1)
+                                                    Spacer()
+                                                    Text("$\(item.totalPrice)")
+                                                        .font(.system(size: 11, design: .monospaced))
+                                                        .foregroundColor(.secondary)
+                                                }
+                                            }
+                                        }
+                                        .padding(8)
+                                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                        .cornerRadius(6)
+                                    }
+                                }
+                                .padding(10)
+                                .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                                .cornerRadius(8)
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(uiColor: .secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                // 3. Parts markup & business profit calculation card (with interactive slider)
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
-                        Label("Emergency Parts & Contract Markup", systemImage: "wrench.and.screwdriver.fill")
+                        Label("Emergency Parts & Markup Profit", systemImage: "wrench.and.screwdriver.fill")
                             .font(.appHeadline)
                             .foregroundColor(Color.brandNavy)
 
@@ -519,10 +630,20 @@ struct ClerkSplitView: View {
                             .font(.system(size: 14, weight: .medium))
                     }
 
+                    HStack {
+                        Text("Business Profit Markup")
+                            .font(.appSubheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("+\(viewModel.formattedMarkupAmount)")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(Color.statusGreen)
+                    }
+
                     // interactive markup slider
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text("Parts Markup Percentage")
+                            Text("Markup Percentage")
                                 .font(.appSubheadline)
                                 .foregroundColor(.secondary)
 
@@ -533,15 +654,22 @@ struct ClerkSplitView: View {
                                 .foregroundColor(Color.statusGreen)
                         }
 
-                        Slider(value: $viewModel.partsMarkupPercent, in: 15.0...45.0, step: 1.0)
+                        Slider(value: $viewModel.partsMarkupPercent, in: 0.0...50.0, step: 1.0)
                             .tint(Color.statusGreen)
+                            .disabled(!viewModel.canEditSelectedOrder)
 
                         HStack {
-                            Text("15% (Standard)")
+                            Text("0% (Wholesale)")
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                             Spacer()
-                            Text("45% (Critical Emergency)")
+                            if !viewModel.canEditSelectedOrder {
+                                Text("Locked - Finalized at +\(Int(viewModel.partsMarkupPercent))%")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(Color.statusAmber)
+                                Spacer()
+                            }
+                            Text("50% (Max Margin)")
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                         }
@@ -554,37 +682,7 @@ struct ClerkSplitView: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .cornerRadius(12)
 
-                // 3. equipment fee & taxes card
-                VStack(alignment: .leading, spacing: 10) {
-                    Label("Surcharges & Sales Tax", systemImage: "percent")
-                        .font(.appHeadline)
-                        .foregroundColor(Color.brandNavy)
-
-                    Divider()
-
-                    HStack {
-                        Text("Fleet Equipment Surcharge")
-                            .font(.appSubheadline)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(viewModel.formattedEquipmentFee)
-                            .font(.system(size: 14, weight: .medium))
-                    }
-
-                    HStack {
-                        Text("State Sales Tax (8.0%)")
-                            .font(.appSubheadline)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(viewModel.formattedTaxAmount)
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                }
-                .padding(16)
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                .cornerRadius(12)
-
-                // 4. exportable official invoice summary card
+                // 4. exportable official invoice summary card (Surcharges & Sales Tax removed)
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Label("Commercial Invoice Preview", systemImage: "doc.plaintext.fill")
@@ -629,7 +727,7 @@ struct ClerkSplitView: View {
                         if !viewModel.laborBreakdown.isEmpty {
                             ForEach(viewModel.laborBreakdown) { item in
                                 HStack {
-                                    Text("   • \(item.technicianName) (\(item.roleLabel))")
+                                    Text("   - \(item.technicianName) (\(item.roleLabel))")
                                         .font(.system(size: 10))
                                         .foregroundColor(.secondary)
                                     Spacer()
@@ -641,26 +739,10 @@ struct ClerkSplitView: View {
                         }
 
                         HStack {
-                            Text("2. Materials (Markup \(Int(viewModel.partsMarkupPercent))%)")
+                            Text("2. Materials (Markup +\(Int(viewModel.partsMarkupPercent))%)")
                                 .font(.system(size: 12))
                             Spacer()
                             Text(viewModel.formattedPartsWithMarkup)
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        }
-
-                        HStack {
-                            Text("3. Fleet Equipment Fee")
-                                .font(.system(size: 12))
-                            Spacer()
-                            Text(viewModel.formattedEquipmentFee)
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        }
-
-                        HStack {
-                            Text("4. State Sales Tax (8%)")
-                                .font(.system(size: 12))
-                            Spacer()
-                            Text(viewModel.formattedTaxAmount)
                                 .font(.system(size: 12, weight: .medium, design: .monospaced))
                         }
 
@@ -685,33 +767,26 @@ struct ClerkSplitView: View {
 
                     // action buttons: compile official invoice, share export & issue to client
                     VStack(spacing: 8) {
-                        Button(action: {
-                            let generator = UINotificationFeedbackGenerator()
-                            generator.notificationOccurred(.success)
-                            Task {
-                                _ = await viewModel.generateBackendEstimate()
+                        if viewModel.canEditSelectedOrder {
+                            Button(action: {
+                                let generator = UINotificationFeedbackGenerator()
+                                generator.notificationOccurred(.success)
+                                Task {
+                                    _ = await viewModel.generateBackendEstimate()
+                                }
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                                    Text("Re-Calculate & Compile Draft")
+                                        .fontWeight(.semibold)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 11)
+                                .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                                .foregroundColor(Color.brandNavy)
+                                .cornerRadius(8)
                             }
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                                Text("Re-Calculate & Compile Draft")
-                                    .fontWeight(.semibold)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 11)
-                            .background(
-                                viewModel.canBillSelectedOrder
-                                    ? Color(uiColor: .tertiarySystemGroupedBackground)
-                                    : Color(uiColor: .tertiarySystemGroupedBackground).opacity(0.5)
-                            )
-                            .foregroundColor(
-                                viewModel.canBillSelectedOrder
-                                    ? Color.brandNavy
-                                    : Color.secondary
-                            )
-                            .cornerRadius(8)
                         }
-                        .disabled(!viewModel.canBillSelectedOrder)
 
                         HStack(spacing: 12) {
                             ShareLink(item: viewModel.invoiceExportText) {
@@ -727,29 +802,48 @@ struct ClerkSplitView: View {
                                 .cornerRadius(8)
                             }
 
-                            Button(action: {
-                                let generator = UINotificationFeedbackGenerator()
-                                generator.notificationOccurred(.success)
-                                Task {
-                                    await viewModel.issueInvoiceToClient()
-                                }
-                            }) {
+                            if viewModel.isOrderAlreadyBilled {
                                 HStack(spacing: 6) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                    Text("Issue to Client")
+                                    Image(systemName: "checkmark.seal.fill")
+                                    Text("Invoice Finalized & Billed")
                                         .fontWeight(.bold)
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
-                                .background(
-                                    viewModel.canBillSelectedOrder
-                                        ? Color.brandNavy
-                                        : Color.gray.opacity(0.5)
-                                )
-                                .foregroundColor(.white)
+                                .background(Color.statusGreen.opacity(0.18))
+                                .foregroundColor(Color.statusGreen)
+                                .cornerRadius(8)
+                            } else if viewModel.canEditSelectedOrder {
+                                Button(action: {
+                                    let generator = UINotificationFeedbackGenerator()
+                                    generator.notificationOccurred(.success)
+                                    Task {
+                                        _ = await viewModel.issueInvoiceToClient()
+                                    }
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                        Text("Issue to Client")
+                                            .fontWeight(.bold)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(Color.brandNavy)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(8)
+                                }
+                            } else {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "clock.badge.exclamationmark")
+                                    Text("Awaiting Completion")
+                                        .fontWeight(.medium)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.gray.opacity(0.2))
+                                .foregroundColor(.secondary)
                                 .cornerRadius(8)
                             }
-                            .disabled(!viewModel.canBillSelectedOrder)
                         }
                     }
                 }

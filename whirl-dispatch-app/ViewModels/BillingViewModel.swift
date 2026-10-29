@@ -23,6 +23,7 @@ final class BillingViewModel {
     var workOrders: [WorkOrder] = []
     var selectedWorkOrder: WorkOrder? = nil
     var approvedExpenses: [ExpenseClaim] = []
+    var selectedOrderApprovedExpenses: [ExpenseClaim] = []
     var invoices: [BillingInvoice] = []
 
     var selectedFilter: BillingFilter = .all
@@ -37,9 +38,9 @@ final class BillingViewModel {
     var partsSubtotal: Double = 0.0
     var partsMarkupPercent: Double = 25.0
 
-    // Surcharges & taxes
-    var equipmentFee: Double = 75.0
-    var taxPercent: Double = 8.0
+    // Surcharges & taxes (set to zero per business requirements)
+    var equipmentFee: Double = 0.0
+    var taxPercent: Double = 0.0
 
     var currentInvoiceId: String? = nil
     var currentInvoiceNumber: String = "INV-2026-001"
@@ -58,6 +59,15 @@ final class BillingViewModel {
     ) {
         self.apiService = apiService ?? .shared
         self.repository = repository ?? .shared
+    }
+
+    var isOrderAlreadyBilled: Bool {
+        selectedWorkOrder?.status == .billed || invoiceStatus == .issuedToClient || invoiceStatus == .paid
+    }
+
+    var canEditSelectedOrder: Bool {
+        guard let order = selectedWorkOrder else { return false }
+        return order.status == .completed && !isOrderAlreadyBilled
     }
 
     var canBillSelectedOrder: Bool {
@@ -126,7 +136,7 @@ final class BillingViewModel {
     }
 
     var formattedTaxAmount: String {
-        formatCurrency(calculatedTaxAmount)
+        formatCurrency(taxPercent)
     }
 
     var formattedGrandTotal: String {
@@ -176,9 +186,6 @@ final class BillingViewModel {
            Wholesale Parts Cost: \(formattedPartsSubtotal)
            Contract Markup (\(Int(partsMarkupPercent))%): \(formattedMarkupAmount)
            Subtotal Parts: \(formattedPartsWithMarkup)
-
-        3. Fleet Equipment & Dispatch Surcharge: \(formattedEquipmentFee)
-        4. State Sales Tax (\(String(format: "%.1f", taxPercent))%): \(formattedTaxAmount)
         --------------------------------------------------
         TOTAL BALANCE DUE: \(formattedGrandTotal)
         ==================================================
@@ -197,7 +204,10 @@ final class BillingViewModel {
         let billableOrders = orders.filter { $0.status == .completed || $0.status == .billed }
         self.workOrders = billableOrders
 
-        if selectedWorkOrder == nil || !billableOrders.contains(where: { $0.id == selectedWorkOrder?.id }) {
+        if let currentSelectedId = selectedWorkOrder?.id,
+           let matching = billableOrders.first(where: { $0.id == currentSelectedId }) {
+            self.selectedWorkOrder = matching
+        } else if selectedWorkOrder == nil || !billableOrders.contains(where: { $0.id == selectedWorkOrder?.id }) {
             self.selectedWorkOrder = billableOrders.first
         }
 
@@ -226,6 +236,8 @@ final class BillingViewModel {
         self.partsSubtotal = 0.0
         self.partsMarkupPercent = 25.0
         self.equipmentFee = 0.0
+        self.taxPercent = 0.0
+        self.selectedOrderApprovedExpenses = []
         self.currentInvoiceId = nil
         self.currentInvoiceNumber = ""
         self.invoiceStatus = .draftEstimate
@@ -250,8 +262,25 @@ final class BillingViewModel {
             self.hourlyRate = calc.hourlyLaborRateApplied
             self.partsSubtotal = calc.subtotalApprovedParts
             self.partsMarkupPercent = calc.partsMarkupPercentApplied
-            self.equipmentFee = calc.fleetEquipmentFee > 0 ? 75.0 : (order.assignedFleetAssetId != nil ? 75.0 : 0.0)
-            self.taxPercent = calc.taxPercent
+            self.equipmentFee = 0.0
+            self.taxPercent = 0.0
+
+            if let approved = res.approvedExpenses {
+                self.selectedOrderApprovedExpenses = approved
+                if !approved.isEmpty {
+                    self.partsSubtotal = approved.reduce(0.0) { $0 + (Double($1.totalAmount) ?? 0.0) }
+                }
+            } else {
+                if let expRes: WorkOrderExpensesResponse = try? await apiService.send(.getExpensesByWorkOrder(workOrderId: order.id)) {
+                    let approved = expRes.claims.filter { $0.approvalStatus == .approved }
+                    self.selectedOrderApprovedExpenses = approved
+                    if !approved.isEmpty {
+                        self.partsSubtotal = approved.reduce(0.0) { $0 + (Double($1.totalAmount) ?? 0.0) }
+                    }
+                } else {
+                    self.selectedOrderApprovedExpenses = []
+                }
+            }
 
             if let inv = res.existingInvoice {
                 self.currentInvoiceId = inv.id
@@ -268,17 +297,31 @@ final class BillingViewModel {
             self.currentInvoiceNumber = "INV-\(cleanNum)"
             self.laborHours = 2.5
             self.hourlyRate = 85.0
-            self.equipmentFee = order.assignedFleetAssetId != nil ? 75.0 : 0.0
+            self.equipmentFee = 0.0
+            self.taxPercent = 0.0
             if let markupStr = order.facility?.partsMarkupPercent, let markup = Double(markupStr) {
                 self.partsMarkupPercent = markup
+            }
+            if let expRes: WorkOrderExpensesResponse = try? await apiService.send(.getExpensesByWorkOrder(workOrderId: order.id)) {
+                let approved = expRes.claims.filter { $0.approvalStatus == .approved }
+                self.selectedOrderApprovedExpenses = approved
+                if !approved.isEmpty {
+                    self.partsSubtotal = approved.reduce(0.0) { $0 + (Double($1.totalAmount) ?? 0.0) }
+                }
+            } else {
+                self.selectedOrderApprovedExpenses = []
             }
         }
     }
 
     // sync estimate calculation with backend NeonDB and compile invoice
     func generateBackendEstimate() async -> Bool {
-        guard let order = selectedWorkOrder, canBillSelectedOrder else {
-            errorMessage = "In-progress dispatches cannot be billed. Work order must be completed."
+        guard let order = selectedWorkOrder, canEditSelectedOrder else {
+            if isOrderAlreadyBilled {
+                errorMessage = "Already billed invoices cannot be modified. Invoicing parameters are locked."
+            } else {
+                errorMessage = "In-progress dispatches cannot be billed. Work order must be completed."
+            }
             return false
         }
         isLoading = true
@@ -307,12 +350,17 @@ final class BillingViewModel {
 
     // issue finalized invoice to client
     func issueInvoiceToClient() async -> Bool {
-        guard let order = selectedWorkOrder, canBillSelectedOrder else {
-            errorMessage = "In-progress dispatches cannot be billed. Work order must be completed."
+        guard selectedWorkOrder != nil, canEditSelectedOrder else {
+            if isOrderAlreadyBilled {
+                errorMessage = "This invoice is already finalized and billed."
+            } else {
+                errorMessage = "In-progress dispatches cannot be billed. Work order must be completed."
+            }
             return false
         }
         isLoading = true
 
+        var success = false
         if let invId = currentInvoiceId {
             do {
                 let _: InvoiceStatusUpdateResponse = try await apiService.send(
@@ -320,13 +368,11 @@ final class BillingViewModel {
                 )
                 self.invoiceStatus = .issuedToClient
                 successToast = "Invoice \(currentInvoiceNumber) issued to client facility."
-                isLoading = false
-                return true
+                success = true
             } catch {
                 self.invoiceStatus = .issuedToClient
                 successToast = "Invoice \(currentInvoiceNumber) issued to client facility."
-                isLoading = false
-                return true
+                success = true
             }
         } else {
             // First compile, then update status
@@ -338,9 +384,16 @@ final class BillingViewModel {
             }
             self.invoiceStatus = .issuedToClient
             successToast = "Invoice \(currentInvoiceNumber) issued to client facility."
-            isLoading = false
-            return true
+            success = true
         }
+
+        if success {
+            // Auto-refresh the invoice queue after successfully billing
+            await loadBillingData()
+        }
+
+        isLoading = false
+        return success
     }
 }
 
