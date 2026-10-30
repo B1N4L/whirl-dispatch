@@ -35,13 +35,14 @@ enum APIEndpoint {
    case getAttendanceHistory(workOrderId: String)
     case getExpenses
     case getExpensesByWorkOrder(workOrderId: String)
-    case submitExpense(workOrderId: String, vendorName: String, receiptNumber: String?, currency: String, receiptImageUrl: String, lat: Double, lng: Double, items: [[String: Any]])
+    case submitExpense(workOrderId: String, vendorName: String, receiptNumber: String?, currency: String, receiptImageUrl: String? = nil, lat: Double, lng: Double, items: [[String: Any]])
     case approveExpense(id: String, status: String, reason: String?)
     case getEstimatePreview(workOrderId: String)
     case generateEstimate(workOrderId: String, partsMarkupPercent: Double? = nil)
     case getInvoice(id: String)
     case updateInvoiceStatus(id: String, status: String)
     case getBillingInvoices
+    case getDashboardAnalytics
     case getTechnicians
     case createWorkOrder(
         clientFacilityId: String,
@@ -84,6 +85,7 @@ enum APIEndpoint {
         case .getInvoice(let id): return "/billing/invoices/\(id)"
         case .updateInvoiceStatus(let id, _): return "/billing/invoices/\(id)/status"
         case .getBillingInvoices: return "/billing"
+        case .getDashboardAnalytics: return "/billing/dashboard-analytics"
         case .getTechnicians: return "/users/technicians"
         case .createWorkOrder: return "/work-orders"
         case .updateProfile: return "/auth/profile"
@@ -95,7 +97,7 @@ enum APIEndpoint {
 
     var method: HTTPMethod {
         switch self {
-        case .health, .getFacilities, .getFleet, .getFleetTracking, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getExpensesByWorkOrder, .getBillingInvoices, .getInvoice, .getAttendanceHistory, .getCurrentAttendance, .getTechnicians, .getEstimatePreview, .getTeamTelemetry:
+        case .health, .getFacilities, .getFleet, .getFleetTracking, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getExpensesByWorkOrder, .getBillingInvoices, .getDashboardAnalytics, .getInvoice, .getAttendanceHistory, .getCurrentAttendance, .getTechnicians, .getEstimatePreview, .getTeamTelemetry:
             return .get
         case .login, .clockIn, .clockOut, .pauseBreak, .submitExpense, .generateEstimate, .createWorkOrder, .changePassword, .sendTelemetry:
             return .post
@@ -168,11 +170,15 @@ enum APIEndpoint {
               "workOrderId": workOrderId,
               "vendorName": vendorName,
               "currency": currency,
-              "receiptImageUrl": receiptImageUrl,
               "receiptStoreLatitude": lat,
               "receiptStoreLongitude": lng,
               "items": items
           ]
+          if let receiptImageUrl = receiptImageUrl, !receiptImageUrl.trimmingCharacters(in: .whitespaces).isEmpty {
+              body["receiptImageUrl"] = receiptImageUrl
+          } else {
+              body["receiptImageUrl"] = "none"
+          }
           if let receiptNumber = receiptNumber, !receiptNumber.isEmpty {
               body["receiptNumber"] = receiptNumber
           }

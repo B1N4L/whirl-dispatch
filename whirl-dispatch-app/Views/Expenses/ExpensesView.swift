@@ -42,57 +42,90 @@ struct ExpensesView: View {
                     .background(Color.statusGreen.opacity(0.12))
                 }
 
-                ScrollView {
-                    VStack(spacing: 16) {
-                        // 1. executive financial summary card
-                        metricsSummaryCard
+                if let dispatch = viewModel.currentDispatch {
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            // active dispatch context header
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(dispatch.workOrderNumber)
+                                            .font(.caption2)
+                                            .fontWeight(.bold)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.brandNavy.opacity(0.12))
+                                            .foregroundColor(Color.brandNavy)
+                                            .cornerRadius(4)
 
-                        // 2. work order context filter
-                        workOrderContextPicker
+                                        Text(dispatch.status.label)
+                                            .font(.caption2)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.secondary)
+                                    }
 
-                        // 3. filter chips row
-                        filterChipsRow
+                                    Text(dispatch.facility?.facilityName ?? dispatch.title)
+                                        .font(.subheadline)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.primary)
+                                }
 
-                        // 4. claims ledger list
-                        claimsLedgerContent
+                                Spacer()
+                            }
+                            .padding(.horizontal, 4)
+
+                            // 1. executive financial summary card
+                            metricsSummaryCard
+
+                            // 2. filter chips row
+                            filterChipsRow
+
+                            // 3. claims ledger list
+                            claimsLedgerContent
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
-                .refreshable {
-                    await viewModel.loadExpenses()
+                    .refreshable {
+                        await viewModel.loadExpenses()
+                    }
+                } else {
+                    standbyEmptyStateView
                 }
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Field Expenses")
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: {
-                        viewModel.showNewExpenseSheet = true
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "plus.circle.fill")
-                            Text("New Receipt")
-                                .fontWeight(.semibold)
+                if viewModel.currentDispatch != nil {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: {
+                            viewModel.showNewExpenseSheet = true
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus.circle.fill")
+                                Text("New Receipt")
+                                    .fontWeight(.semibold)
+                            }
+                            .font(.appSubheadline)
                         }
-                        .font(.appSubheadline)
                     }
                 }
             }
             .sheet(isPresented: $viewModel.showNewExpenseSheet) {
-                NewExpenseSheet(
-                    workOrders: viewModel.assignedWorkOrders,
-                    preselectedWorkOrderId: viewModel.selectedWorkOrderId
-                ) { woId, vendor, inv, price, qty, desc, cat in
-                    await viewModel.submitExpense(
-                        workOrderId: woId,
-                        vendorName: vendor,
-                        receiptNumber: inv,
-                        unitPrice: price,
-                        quantity: qty,
-                        partDescription: desc,
-                        category: cat
-                    )
+                if let dispatch = viewModel.currentDispatch {
+                    NewExpenseSheet(
+                        workOrderId: dispatch.id
+                    ) { woId, vendor, inv, price, qty, desc, cat in
+                        await viewModel.submitExpense(
+                            workOrderId: woId,
+                            vendorName: vendor,
+                            receiptNumber: inv,
+                            unitPrice: price,
+                            quantity: qty,
+                            partDescription: desc,
+                            category: cat
+                        )
+                    }
                 }
             }
             .task {
@@ -164,33 +197,56 @@ struct ExpensesView: View {
     }
 
 
-    // work order context picker
-    private var workOrderContextPicker: some View {
-        HStack {
-            Image(systemName: "wrench.and.screwdriver")
-                .foregroundColor(.secondary)
-                .font(.system(size: 14))
+    // standby empty state view when technician has no active dispatch
+    private var standbyEmptyStateView: some View {
+        VStack(spacing: 16) {
+            Spacer()
 
-            Text("Dispatch:")
-                .font(.appSubheadline)
-                .foregroundColor(.secondary)
+            ZStack {
+                Circle()
+                    .fill(Color(hex: "607D8B").opacity(0.12))
+                    .frame(width: 64, height: 64)
 
-            Picker("Work Order", selection: $viewModel.selectedWorkOrderId) {
-                Text("All Dispatches").tag("")
-                ForEach(viewModel.assignedWorkOrders) { wo in
-                    Text("\(wo.workOrderNumber) - \(wo.facility?.facilityName ?? wo.title)")
-                        .tag(wo.id)
-                }
+                Image(systemName: "calendar.badge.exclamationmark")
+                    .font(.system(size: 28))
+                    .foregroundColor(Color(hex: "455A64"))
             }
-            .pickerStyle(.menu)
-            .tint(Color.brandNavy)
+
+            VStack(spacing: 6) {
+                Text("No Active Dispatch")
+                    .font(.appHeadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.primary)
+
+                Text("You are not currently dispatched to any work orders.\nField expense receipts can only be filed during an active job assignment.")
+                    .font(.appSubheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
+
+            Button(action: {
+                Task {
+                    await viewModel.loadExpenses()
+                }
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 13, weight: .bold))
+                    Text("Refresh Dispatches")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.brandNavy.opacity(0.10))
+                .foregroundColor(Color.brandNavy)
+                .cornerRadius(8)
+            }
+            .padding(.top, 4)
 
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .cornerRadius(10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
 
@@ -301,7 +357,7 @@ struct ExpensesView: View {
                     Image(systemName: "exclamationmark.shield.fill")
                         .font(.system(size: 12))
                         .foregroundColor(Color.statusAmber)
-                    Text("Optical Supervisor Review Flagged (>$250)")
+                    Text("Optical Supervisor Review Flagged (>LKR 250)")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(Color.statusAmber)
                 }
@@ -323,7 +379,7 @@ struct ExpensesView: View {
 
                             Spacer()
 
-                            Text("$\(item.totalPrice)")
+                            Text(item.formattedTotalPrice)
                                 .font(.appSubheadline)
                                 .fontWeight(.medium)
                                 .foregroundColor(.secondary)

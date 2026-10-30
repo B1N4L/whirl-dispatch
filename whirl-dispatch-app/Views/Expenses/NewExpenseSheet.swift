@@ -11,11 +11,9 @@ import UIKit
 struct NewExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    var workOrders: [WorkOrder]
-    var preselectedWorkOrderId: String?
-    var onSubmit: (String, String, String?, Double, Int, String, PartCategory) async -> Bool
+    var workOrderId: String
+    var onSubmit: (String, String, String?, Double, Int, String, PartCategory) async -> String?
 
-    @State private var selectedWorkOrderId: String = ""
     @State private var vendorName: String = ""
     @State private var invoiceNumber: String = ""
     @State private var selectedCategory: PartCategory = .hardware
@@ -31,40 +29,20 @@ struct NewExpenseSheet: View {
 
     // live calculated subtotal
     private var calculatedTotal: Double {
-        let price = Double(unitPriceString.replacingOccurrences(of: "$", with: "").trimmingCharacters(in: .whitespaces)) ?? 0.0
+        let price = AppCurrency.sanitizePriceInput(unitPriceString)
         return Double(quantity) * price
     }
 
     // currency formatted string using standard number formatter
     private var formattedTotal: String {
-       let formatter = NumberFormatter()
-       formatter.numberStyle = .currency
-       formatter.currencyCode = "USD"
-       formatter.maximumFractionDigits = 2
-       return formatter.string(from: NSNumber(value: calculatedTotal)) ?? String(format: "$%.2f", calculatedTotal)
+        AppCurrency.format(calculatedTotal)
     }
 
 
     var body: some View {
         NavigationStack {
           Form {
-              // section 1: dispatches
-              Section(header: Text("Assigned Work Order")) {
-                  if workOrders.isEmpty {
-                      Text("No active work orders available")
-                          .font(.appSubheadline)
-                          .foregroundColor(.secondary)
-                  } else {
-                      Picker("Work Order", selection: $selectedWorkOrderId) {
-                          ForEach(workOrders) { wo in
-                              Text("\(wo.workOrderNumber) - \(wo.title)")
-                                  .tag(wo.id)
-                          }
-                      }
-                  }
-              }
-
-              // section 2: vendor and receipt
+              // section 1: vendor and receipt
               Section(header: Text("Supply House & Receipt")) {
                   TextField("Store / Vendor Name", text: $vendorName)
                       .textInputAutocapitalization(.words)
@@ -101,7 +79,7 @@ struct NewExpenseSheet: View {
                   }
 
                   HStack {
-                      Text("Unit Price ($)")
+                      Text("Unit Price (LKR)")
                       Spacer()
                       TextField("0.00", text: $unitPriceString)
                           .keyboardType(.decimalPad)
@@ -137,41 +115,12 @@ struct NewExpenseSheet: View {
                                   .fontWeight(.semibold)
                                   .foregroundColor(Color.statusAmber)
 
-                              Text("Claims exceeding $250.00 require supervisor review before customer invoice generation.")
+                              Text("Claims exceeding LKR 250.00 require supervisor review before customer invoice generation.")
                                   .font(.appCaption)
                                   .foregroundColor(.secondary)
                           }
                       }
                       .padding(.vertical, 2)
-                  }
-              }
-
-
-              // section 5: camera placeholder
-              Section(header: Text("Proof of Purchase")) {
-                  Button(action: {
-                      // optical camera capture will be wired in Phase 11
-                      let generator = UIImpactFeedbackGenerator(style: .light)
-                      generator.impactOccurred()
-                  }) {
-                      HStack(spacing: 12) {
-                          Image(systemName: "camera.viewfinder")
-                              .font(.system(size: 26))
-                              .foregroundColor(Color.brandNavy)
-
-                          VStack(alignment: .leading, spacing: 2) {
-                              Text("Capture Receipt Photo")
-                                  .font(.appSubheadline)
-                                  .foregroundColor(Color.brandNavy)
-                              Text("Attached standard purchase ticket")
-                                  .font(.appCaption)
-                                  .foregroundColor(.secondary)
-                          }
-                          Spacer()
-                          Image(systemName: "checkmark.circle.fill")
-                              .foregroundColor(Color.statusGreen)
-                      }
-                      .padding(.vertical, 4)
                   }
               }
 
@@ -210,13 +159,6 @@ struct NewExpenseSheet: View {
                   .disabled(isSubmitting || vendorName.trimmingCharacters(in: .whitespaces).isEmpty || partDescription.trimmingCharacters(in: .whitespaces).isEmpty)
               }
           }
-          .onAppear {
-              if let pre = preselectedWorkOrderId, !pre.isEmpty {
-                  selectedWorkOrderId = pre
-              } else if let first = workOrders.first {
-                  selectedWorkOrderId = first.id
-              }
-          }
         }
     }
 
@@ -251,8 +193,8 @@ struct NewExpenseSheet: View {
 
 
     private func submitForm() {
-        guard !selectedWorkOrderId.isEmpty else {
-            errorMessage = "Please select an assigned work order."
+        guard !workOrderId.isEmpty else {
+            errorMessage = "No active work order dispatch available."
             return
         }
 
@@ -268,8 +210,8 @@ struct NewExpenseSheet: View {
             return
         }
 
-        let cleanPriceStr = unitPriceString.replacingOccurrences(of: "$", with: "").trimmingCharacters(in: .whitespaces)
-        guard let price = Double(cleanPriceStr), price > 0 else {
+        let price = AppCurrency.sanitizePriceInput(unitPriceString)
+        guard price > 0 else {
             errorMessage = "Please enter a valid positive unit price."
             return
         }
@@ -279,12 +221,12 @@ struct NewExpenseSheet: View {
 
         Task {
             let inv = invoiceNumber.trimmingCharacters(in: .whitespaces).isEmpty ? nil : invoiceNumber.trimmingCharacters(in: .whitespaces)
-            let success = await onSubmit(selectedWorkOrderId, cleanVendor, inv, price, quantity, cleanPart, selectedCategory)
+            let failureReason = await onSubmit(workOrderId, cleanVendor, inv, price, quantity, cleanPart, selectedCategory)
             isSubmitting = false
-            if success {
-                dismiss()
+            if let failureReason = failureReason {
+                errorMessage = failureReason
             } else {
-                errorMessage = "Failed to submit expense claim. Check network or local cache."
+                dismiss()
             }
         }
     }

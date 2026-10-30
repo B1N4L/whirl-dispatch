@@ -40,7 +40,6 @@ enum ProfileSection: String, CaseIterable, Identifiable {
 struct ProfileSectionMenuView: View {
     @Bindable var authVM: AuthViewModel
     @Binding var selectedSection: ProfileSection
-    @State private var showingSignOutAlert = false
 
     var body: some View {
         List {
@@ -121,32 +120,9 @@ struct ProfileSectionMenuView: View {
                     .padding(.vertical, 4)
                 }
             }
-
-            // Quick Sign Out Row
-            Section {
-                Button(role: .destructive, action: {
-                    showingSignOutAlert = true
-                }) {
-                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color.statusRed)
-                }
-            }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Profile & Settings")
-        .confirmationDialog(
-            "Are you sure you want to sign out?",
-            isPresented: $showingSignOutAlert,
-            titleVisibility: .visible
-        ) {
-            Button("Sign Out", role: .destructive) {
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-                authVM.logout()
-            }
-            Button("Cancel", role: .cancel) {}
-        }
     }
 
     private func roleColor(for role: UserRole) -> Color {
@@ -621,7 +597,7 @@ struct OperationalContractDetailView: View {
                                 .fontWeight(.bold)
                                 .foregroundColor(.secondary)
                             if let rate = user.hourlyLaborRate {
-                                Text("$\(rate) / hr")
+                                Text(AppCurrency.formatRate(stringVal: rate))
                                     .font(.appMono)
                                     .fontWeight(.bold)
                                     .foregroundColor(Color.brandNavy)
@@ -705,17 +681,6 @@ struct SessionDiagnosticsDetailView: View {
                     Text("Live Vercel Production")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(Color.statusGreen)
-                }
-
-                Divider()
-
-                HStack {
-                    Text("Coursework Spec")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("NIBM / Coventry University Computing")
-                        .font(.system(size: 13, weight: .medium))
                 }
             }
             .padding(18)

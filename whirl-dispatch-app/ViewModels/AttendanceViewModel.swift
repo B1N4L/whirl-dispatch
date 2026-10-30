@@ -98,13 +98,22 @@ final class AttendanceViewModel {
         isLoading = true
         errorMessage = nil
 
-        // load dispatches to pick which facility we are clocking into
+        // load dispatches to determine active workplace site (single active dispatch model)
         let (orders, _, _) = await WorkOrderRepository.shared.fetchWorkOrders()
-        self.assignedWorkOrders = orders
+        let activeOrders = orders.filter {
+            $0.status == .onSiteActive || $0.status == .unacknowledgedBreak || $0.status == .awaitingPartsApproval || $0.status == .enRoute || $0.status == .dispatched
+        }
+        self.assignedWorkOrders = activeOrders
 
-        if selectedWorkOrder == nil {
-            // prioritize on-site or en-route work order
-            self.selectedWorkOrder = orders.first(where: { $0.status == .onSiteActive || $0.status == .enRoute }) ?? orders.first
+        if !isClockedIn || selectedWorkOrder == nil {
+            // prioritize in-progress active work order, then first dispatched
+            if let active = activeOrders.first(where: {
+                $0.status == .onSiteActive || $0.status == .unacknowledgedBreak || $0.status == .awaitingPartsApproval || $0.status == .enRoute
+            }) {
+                self.selectedWorkOrder = active
+            } else {
+                self.selectedWorkOrder = activeOrders.first(where: { $0.status == .dispatched })
+            }
         }
 
         var activeFound = false
@@ -120,7 +129,7 @@ final class AttendanceViewModel {
                     self.isClockedIn = true
                     self.isOnBreak = (active.sessionStatus == .onBreakViolation)
 
-                    if let matchingOrder = self.assignedWorkOrders.first(where: { $0.id == active.workOrderId }) {
+                    if let matchingOrder = orders.first(where: { $0.id == active.workOrderId }) {
                         self.selectedWorkOrder = matchingOrder
                     }
 
@@ -157,7 +166,7 @@ final class AttendanceViewModel {
                 self.isClockedIn = true
                 self.isOnBreak = (activeCached.sessionStatus == .onBreakViolation)
 
-                if let matchingOrder = self.assignedWorkOrders.first(where: { $0.id == activeCached.workOrderId }) {
+                if let matchingOrder = orders.first(where: { $0.id == activeCached.workOrderId }) {
                     self.selectedWorkOrder = matchingOrder
                 }
 

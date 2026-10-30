@@ -104,9 +104,23 @@ struct whirl_dispatch_appTests {
             dueDate: nil
         )
 
-        #expect(invoice.formattedGrandTotal == "$758.70")
-        #expect(invoice.formattedLaborTotal == "$412.50")
-        #expect(invoice.formattedPartsTotal == "$240.00")
+        #expect(invoice.formattedGrandTotal == "LKR 758.70")
+        #expect(invoice.formattedLaborTotal == "LKR 412.50")
+        #expect(invoice.formattedPartsTotal == "LKR 240.00")
+    }
+
+    @Test func testAppCurrencyFormatting() {
+        #expect(AppCurrency.format(1250.50) == "LKR 1,250.50")
+        #expect(AppCurrency.format(0.0) == "LKR 0.00")
+        #expect(AppCurrency.format(-85.0) == "-LKR 85.00")
+        #expect(AppCurrency.format(stringVal: "3500.00") == "LKR 3,500.00")
+        #expect(AppCurrency.formatRate(85.0) == "LKR 85.00/hr")
+        #expect(AppCurrency.formatRate(stringVal: "120.00") == "LKR 120.00/hr")
+        #expect(AppCurrency.formatCompact(46550.0) == "LKR 46.5k")
+        #expect(AppCurrency.formatCompact(1500000.0) == "LKR 1.5M")
+        #expect(AppCurrency.sanitizePriceInput("LKR 250.00") == 250.00)
+        #expect(AppCurrency.sanitizePriceInput("$120.50") == 120.50)
+        #expect(AppCurrency.sanitizePriceInput("Rs. 450") == 450.00)
     }
 
 

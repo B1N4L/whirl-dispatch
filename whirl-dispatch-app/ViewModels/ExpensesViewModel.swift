@@ -24,7 +24,6 @@ enum ExpenseFilter: String, CaseIterable, Identifiable {
 final class ExpensesViewModel {
     var claims: [ExpenseClaim] = []
     var assignedWorkOrders: [WorkOrder] = []
-    var selectedWorkOrderId: String = ""
     var selectedFilter: ExpenseFilter = .all
 
     var isLoading: Bool = false
@@ -44,23 +43,27 @@ final class ExpensesViewModel {
     }
 
 
+    // single active dispatch resolution
+    var currentDispatch: WorkOrder? {
+        if let active = assignedWorkOrders.first(where: {
+            $0.status == .onSiteActive || $0.status == .unacknowledgedBreak || $0.status == .awaitingPartsApproval || $0.status == .enRoute
+        }) {
+            return active
+        }
+        return assignedWorkOrders.first(where: { $0.status == .dispatched })
+    }
+
     // filtered list for current selection
     var filteredClaims: [ExpenseClaim] {
-      var list = claims
-
-      if !selectedWorkOrderId.isEmpty {
-          list = list.filter { $0.workOrderId == selectedWorkOrderId }
-      }
-
       switch selectedFilter {
       case .all:
-          return list
+          return claims
       case .pending:
-          return list.filter { $0.approvalStatus == .pending }
+          return claims.filter { $0.approvalStatus == .pending }
       case .approved:
-          return list.filter { $0.approvalStatus == .approved }
+          return claims.filter { $0.approvalStatus == .approved }
       case .rejected:
-          return list.filter { $0.approvalStatus == .rejected }
+          return claims.filter { $0.approvalStatus == .rejected }
       }
     }
 
@@ -90,17 +93,11 @@ final class ExpensesViewModel {
     }
 
     var formattedTotalClaimed: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: totalClaimedAmount)) ?? String(format: "$%.2f", totalClaimedAmount)
+        AppCurrency.format(totalClaimedAmount)
     }
 
     var formattedTotalApproved: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: totalApprovedAmount)) ?? String(format: "$%.2f", totalApprovedAmount)
+        AppCurrency.format(totalApprovedAmount)
     }
 
 
@@ -109,13 +106,18 @@ final class ExpensesViewModel {
         isLoading = true
         errorMessage = nil
 
-        // 1. fetch dispatches
+        // 1. fetch dispatches and filter strictly to active dispatches
         let (orders, _, _) = await WorkOrderRepository.shared.fetchWorkOrders()
-        self.assignedWorkOrders = orders
+        let activeOrders = orders.filter {
+            $0.status == .onSiteActive || $0.status == .unacknowledgedBreak || $0.status == .awaitingPartsApproval || $0.status == .enRoute || $0.status == .dispatched
+        }
+        self.assignedWorkOrders = activeOrders
 
-        // if no order selected yet, default to first or keep empty for all
-        if selectedWorkOrderId.isEmpty, let first = orders.first {
-            selectedWorkOrderId = first.id
+        // 2. if no active dispatch assigned, clear claims and return
+        guard let dispatch = currentDispatch else {
+            self.claims = []
+            isLoading = false
+            return
         }
 
         // if plant room offline mode is on, keep existing offline list
@@ -124,41 +126,13 @@ final class ExpensesViewModel {
             return
         }
 
-        // 2. fetch claims from backend
+        // 3. fetch claims for current active dispatch from backend
         do {
-            var fetchedClaims: [ExpenseClaim] = []
-
-            if !selectedWorkOrderId.isEmpty {
-                let res: WorkOrderExpensesResponse = try await apiService.send(.getExpensesByWorkOrder(workOrderId: selectedWorkOrderId))
-                fetchedClaims = res.claims
-            } else {
-                // fetch all company expenses or query dispatches
-                if let listRes: ExpenseListResponse = try? await apiService.send(.getExpenses) {
-                    fetchedClaims = listRes.expenses
-                } else {
-                    for order in orders.prefix(6) {
-                        if let res: WorkOrderExpensesResponse = try? await apiService.send(.getExpensesByWorkOrder(workOrderId: order.id)) {
-                            fetchedClaims.append(contentsOf: res.claims)
-                        }
-                    }
-                }
-            }
-
-            // deduplicate claims by id
-            var seen = Set<String>()
-            var unique: [ExpenseClaim] = []
-            for claim in fetchedClaims {
-                if !seen.contains(claim.id) {
-                    seen.insert(claim.id)
-                    unique.append(claim)
-                }
-            }
-
-            self.claims = unique
+            let res: WorkOrderExpensesResponse = try await apiService.send(.getExpensesByWorkOrder(workOrderId: dispatch.id))
+            self.claims = res.claims
         } catch {
-            // retain existing local claims on failure
             if claims.isEmpty {
-                self.errorMessage = "Unable to fetch online expense claims. Check server status."
+                self.errorMessage = "Unable to fetch online expense claims for active dispatch."
             }
         }
 
@@ -175,7 +149,7 @@ final class ExpensesViewModel {
         quantity: Int,
         partDescription: String,
         category: PartCategory
-    ) async -> Bool {
+    ) async -> String? {
       let lineTotal = Double(quantity) * unitPrice
       let isThresholdExceeded = lineTotal > 250.0
       let fullPartDescription = "[\(category.rawValue)] \(partDescription)"
@@ -199,8 +173,8 @@ final class ExpensesViewModel {
               vendorName: vendorName,
               receiptNumber: receiptNumber,
               totalAmount: String(format: "%.2f", lineTotal),
-              currency: "USD",
-              receiptImageUrl: "file://local/receipt_\(claimId).jpg",
+              currency: "LKR",
+              receiptImageUrl: nil,
               receiptStoreLatitude: 6.9271,
               receiptStoreLongitude: 79.8612,
               receiptCapturedAt: ISO8601DateFormatter().string(from: Date()),
@@ -214,7 +188,7 @@ final class ExpensesViewModel {
 
           claims.insert(localClaim, at: 0)
           successMessage = "Saved locally. Will sync when exiting Plant Room Mode."
-          return true
+          return nil
       }
 
       // online live submission
@@ -227,13 +201,12 @@ final class ExpensesViewModel {
               ]
           ]
 
-          let placeholderImage = "https://whirldispatch.blob.core.windows.net/receipts/proof_\(UUID().uuidString.prefix(8)).jpg"
           let endpoint = APIEndpoint.submitExpense(
               workOrderId: workOrderId,
               vendorName: vendorName,
               receiptNumber: receiptNumber,
-              currency: "USD",
-              receiptImageUrl: placeholderImage,
+              currency: "LKR",
+              receiptImageUrl: nil,
               lat: 6.9271,
               lng: 79.8612,
               items: itemsPayload
@@ -247,11 +220,12 @@ final class ExpensesViewModel {
 
           claims.insert(created, at: 0)
           successMessage = "Emergency parts claim submitted for supervisor approval."
-          return true
+          return nil
       } catch {
           // fallback save locally on network failure
-          errorMessage = error.localizedDescription
-          return false
+          let errText = error.localizedDescription
+          errorMessage = errText
+          return errText
       }
     }
 }

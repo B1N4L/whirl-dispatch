@@ -77,19 +77,22 @@ struct ServiceTests {
         #expect(billingVM.laborSubtotal == 320.0)
         #expect(billingVM.formattedLaborSubtotal.contains("320.00"))
 
-        // parts markup = 200 * 0.20 = 40; parts with markup = 240
-        #expect(billingVM.partsMarkupAmount == 40.0)
-        #expect(billingVM.partsWithMarkup == 240.0)
+        // direct cost base = 320 + 200 = 520
+        #expect(billingVM.directCostSubtotal == 520.0)
 
-        // subtotal = 320 + 240 + 50 = 610
-        #expect(billingVM.subtotalBeforeTax == 610.0)
+        // markup = 520 * 0.20 = 104
+        #expect(billingVM.markupAmount == 104.0)
+        #expect(billingVM.partsMarkupAmount == 104.0)
 
-        // tax = 610 * 0.10 = 61
-        #expect(billingVM.calculatedTaxAmount == 61.0)
+        // subtotal before tax = 520 + 104 + 50 = 674
+        #expect(billingVM.subtotalBeforeTax == 674.0)
 
-        // grand total = 610 + 61 = 671
-        #expect(billingVM.grandTotal == 671.0)
-        #expect(billingVM.formattedGrandTotal.contains("671.00"))
+        // tax = 674 * 0.10 = 67.4
+        #expect(billingVM.calculatedTaxAmount == 67.4)
+
+        // grand total = 674 + 67.4 = 741.4
+        #expect(billingVM.grandTotal == 741.4)
+        #expect(billingVM.formattedGrandTotal.contains("741.40"))
     }
 
 
@@ -102,14 +105,17 @@ struct ServiceTests {
         billingVM.equipmentFee = 0.0
         billingVM.taxPercent = 0.0
 
-        #expect(billingVM.partsWithMarkup == 345.0)
-        #expect(billingVM.grandTotal == 845.0)
+        // labor = 500, parts = 300, direct cost base = 800
+        // markup 15% = 800 * 0.15 = 120
+        #expect(billingVM.directCostSubtotal == 800.0)
+        #expect(billingVM.markupAmount == 120.0)
+        #expect(billingVM.grandTotal == 920.0)
 
-        // clerk increases parts markup to 30%
+        // clerk increases markup to 30%
         billingVM.partsMarkupPercent = 30.0
-        #expect(billingVM.partsMarkupAmount == 90.0)
-        #expect(billingVM.partsWithMarkup == 390.0)
-        #expect(billingVM.grandTotal == 890.0)
+        // markup 30% = 800 * 0.30 = 240
+        #expect(billingVM.markupAmount == 240.0)
+        #expect(billingVM.grandTotal == 1040.0)
     }
 
 

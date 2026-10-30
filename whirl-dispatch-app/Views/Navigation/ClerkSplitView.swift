@@ -11,24 +11,22 @@ import UIKit
 struct ClerkSplitView: View {
     @Bindable var authVM: AuthViewModel
     @State private var viewModel = BillingViewModel()
-    @State private var selectedMenu: ClerkMenu? = .invoicingQueue
+    @State private var selectedMenu: ClerkMenu? = .revenueTelemetry
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var selectedProfileSection: ProfileSection = .personalContact
 
 
     enum ClerkMenu: String, CaseIterable, Identifiable {
+        case revenueTelemetry = "Financial Dashboard"
         case invoicingQueue = "Invoicing Queue"
-        case approvedExpenses = "Approved Expenses"
-        case revenueTelemetry = "Financial Telemetry"
         case profile = "Clerk Profile"
 
         var id: String { rawValue }
 
         var iconName: String {
             switch self {
-            case .invoicingQueue: return "doc.text.fill"
-            case .approvedExpenses: return "creditcard.fill"
             case .revenueTelemetry: return "chart.bar.xaxis"
+            case .invoicingQueue: return "doc.text.fill"
             case .profile: return "person.crop.circle.fill"
             }
         }
@@ -36,90 +34,102 @@ struct ClerkSplitView: View {
 
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            // sidebar column for clerk
-            List(ClerkMenu.allCases, selection: $selectedMenu) { item in
-                NavigationLink(value: item) {
-                    Label(item.rawValue, systemImage: item.iconName)
-                        .font(.appSubheadline)
-                        .padding(.vertical, 4)
+        Group {
+            if selectedMenu == .revenueTelemetry {
+                // 2-column split view for Financial Dashboard (eliminates middle column)
+                NavigationSplitView {
+                    sidebarContent
+                } detail: {
+                    BillingAnalyticsView()
                 }
-            }
-            .listStyle(.sidebar)
-            .navigationTitle("Billing Hub")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Text("Billing Clerk")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundColor(Color.statusGreen)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(Color.statusGreen.opacity(0.12))
-                        )
-                }
-            }
-        } content: {
-            // middle column list
-            Group {
-                if let menu = selectedMenu {
-                    switch menu {
-                    case .invoicingQueue:
-                        invoicingQueueContentList
+            } else {
+                // 3-column split view for Invoicing Queue and Clerk Profile
+                NavigationSplitView(columnVisibility: $columnVisibility) {
+                    sidebarContent
+                } content: {
+                    // middle column list
+                    Group {
+                        if let menu = selectedMenu {
+                            switch menu {
+                            case .invoicingQueue:
+                                invoicingQueueContentList
 
-                    case .approvedExpenses:
-                        approvedExpensesContentList
+                            case .profile:
+                                ProfileSectionMenuView(authVM: authVM, selectedSection: $selectedProfileSection)
 
-                    case .revenueTelemetry:
-                        telemetryContentList
-
-                    case .profile:
-                        ProfileSectionMenuView(authVM: authVM, selectedSection: $selectedProfileSection)
-                    }
-                } else {
-                    Text("Select a billing category")
-                        .font(.appSubheadline)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .navigationTitle(selectedMenu?.rawValue ?? "Invoicing")
-        } detail: {
-            // right detail pane
-            Group {
-                if let menu = selectedMenu {
-                    switch menu {
-                    case .invoicingQueue:
-                        if let order = viewModel.selectedWorkOrder {
-                            billingEstimationDetailPane(order)
+                            case .revenueTelemetry:
+                                EmptyView()
+                            }
                         } else {
-                            EmptyStateView(
-                                icon: "doc.text",
-                                title: "No Work Order Selected",
-                                message: "Select a completed commercial dispatch to compile client billing invoice."
-                            )
+                            Text("Select a billing category")
+                                .font(.appSubheadline)
+                                .foregroundColor(.secondary)
                         }
-
-                    case .approvedExpenses:
-                        approvedExpensesDetailPane
-
-                    case .revenueTelemetry:
-                        BillingAnalyticsView()
-
-                    case .profile:
-                        ProfileDetailPane(section: selectedProfileSection, authVM: authVM)
                     }
-                } else {
-                    Text("Select an invoice from the list")
-                        .font(.appBody)
-                        .foregroundColor(.secondary)
+                    .navigationTitle(selectedMenu?.rawValue ?? "Invoicing")
+                } detail: {
+                    // right detail pane
+                    Group {
+                        if let menu = selectedMenu {
+                            switch menu {
+                            case .invoicingQueue:
+                                if let order = viewModel.selectedWorkOrder {
+                                    billingEstimationDetailPane(order)
+                                } else {
+                                    EmptyStateView(
+                                        icon: "doc.text",
+                                        title: "No Work Order Selected",
+                                        message: "Select a completed commercial dispatch to compile client billing invoice."
+                                    )
+                                }
+
+                            case .profile:
+                                ProfileDetailPane(section: selectedProfileSection, authVM: authVM)
+
+                            case .revenueTelemetry:
+                                BillingAnalyticsView()
+                            }
+                        } else {
+                            Text("Select an invoice from the list")
+                                .font(.appBody)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
             }
         }
         .navigationSplitViewStyle(.balanced)
         .task {
             await viewModel.loadBillingData()
+        }
+    }
+
+
+    // MARK: - Column 1: Sidebar Content
+
+    private var sidebarContent: some View {
+        List(ClerkMenu.allCases, selection: $selectedMenu) { item in
+            NavigationLink(value: item) {
+                Label(item.rawValue, systemImage: item.iconName)
+                    .font(.appSubheadline)
+                    .padding(.vertical, 4)
+            }
+        }
+        .listStyle(.sidebar)
+        .navigationTitle("Billing Hub")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Text("Billing Clerk")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(Color.statusGreen)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color.statusGreen.opacity(0.12))
+                    )
+            }
         }
     }
 
@@ -210,58 +220,6 @@ struct ClerkSplitView: View {
                 }
             }
         }
-    }
-
-    private var approvedExpensesContentList: some View {
-        List(viewModel.approvedExpenses) { claim in
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(claim.vendorName)
-                        .font(.appHeadline)
-                    Spacer()
-                    Text(claim.formattedAmount)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(Color.statusGreen)
-                }
-                HStack {
-                    Text("Approved by Supervisor")
-                        .font(.caption2)
-                        .foregroundColor(Color.statusGreen)
-                    Spacer()
-                    Text(claim.receiptNumber ?? "INV-VERIFIED")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.vertical, 4)
-        }
-        .listStyle(.plain)
-    }
-
-    private var telemetryContentList: some View {
-        List {
-            Section(header: Text("Telemetry Streams")) {
-                HStack {
-                    Image(systemName: "chart.bar.fill")
-                        .foregroundColor(Color.brandNavy)
-                    Text("Facility Revenue Telemetry")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                HStack {
-                    Image(systemName: "chart.pie.fill")
-                        .foregroundColor(Color.statusAmber)
-                    Text("Parts Category Markup")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                HStack {
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .foregroundColor(Color.statusGreen)
-                    Text("Technician Labor Hours")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-            }
-        }
-        .listStyle(.insetGrouped)
     }
 
 
@@ -487,7 +445,7 @@ struct ClerkSplitView: View {
                                 Text("Applied Role Rate")
                                     .font(.appCaption)
                                     .foregroundColor(.secondary)
-                                Text(String(format: "$%.2f / hr", viewModel.hourlyRate))
+                                Text(AppCurrency.formatRate(viewModel.hourlyRate))
                                     .font(.system(size: 14, weight: .semibold))
                             }
                         }
@@ -583,7 +541,7 @@ struct ClerkSplitView: View {
                                                         .foregroundColor(.secondary)
                                                         .lineLimit(1)
                                                     Spacer()
-                                                    Text("$\(item.totalPrice)")
+                                                    Text(item.formattedTotalPrice)
                                                         .font(.system(size: 11, design: .monospaced))
                                                         .foregroundColor(.secondary)
                                                 }
@@ -605,29 +563,47 @@ struct ClerkSplitView: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground))
                 .cornerRadius(12)
 
-                // 3. Parts markup & business profit calculation card (with interactive slider)
+                // 3. Commercial markup & business profit calculation card (with interactive slider)
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
-                        Label("Emergency Parts & Markup Profit", systemImage: "wrench.and.screwdriver.fill")
+                        Label("Commercial Markup & Business Profit", systemImage: "chart.line.uptrend.xyaxis")
                             .font(.appHeadline)
                             .foregroundColor(Color.brandNavy)
 
                         Spacer()
 
-                        Text(viewModel.formattedPartsWithMarkup)
+                        Text("+\(viewModel.formattedMarkupAmount)")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(Color.brandNavy)
+                            .foregroundColor(Color.statusGreen)
                     }
 
                     Divider()
 
                     HStack {
-                        Text("Wholesale Parts Cost")
+                        Text("Audited Field Labor")
+                            .font(.appSubheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(viewModel.formattedLaborSubtotal)
+                            .font(.system(size: 14, weight: .medium))
+                    }
+
+                    HStack {
+                        Text("Supervisor Approved Expenses")
                             .font(.appSubheadline)
                             .foregroundColor(.secondary)
                         Spacer()
                         Text(viewModel.formattedPartsSubtotal)
                             .font(.system(size: 14, weight: .medium))
+                    }
+
+                    HStack {
+                        Text("Combined Direct Cost Base")
+                            .font(.appSubheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(viewModel.formattedDirectCostSubtotal)
+                            .font(.system(size: 14, weight: .semibold, design: .monospaced))
                     }
 
                     HStack {
@@ -659,7 +635,7 @@ struct ClerkSplitView: View {
                             .disabled(!viewModel.canEditSelectedOrder)
 
                         HStack {
-                            Text("0% (Wholesale)")
+                            Text("0% (Direct Cost)")
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                             Spacer()
@@ -739,11 +715,21 @@ struct ClerkSplitView: View {
                         }
 
                         HStack {
-                            Text("2. Materials (Markup +\(Int(viewModel.partsMarkupPercent))%)")
+                            Text("2. Supervisor Approved Expenses")
                                 .font(.system(size: 12))
                             Spacer()
-                            Text(viewModel.formattedPartsWithMarkup)
+                            Text(viewModel.formattedPartsSubtotal)
                                 .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        }
+
+                        HStack {
+                            Text("3. Commercial Markup (+\(Int(viewModel.partsMarkupPercent))%)")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color.statusGreen)
+                            Spacer()
+                            Text("+\(viewModel.formattedMarkupAmount)")
+                                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                                .foregroundColor(Color.statusGreen)
                         }
 
                         Divider()
@@ -855,41 +841,6 @@ struct ClerkSplitView: View {
         }
         .background(Color(uiColor: .systemGroupedBackground))
     }
-
-    private var approvedExpensesDetailPane: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Approved Field Parts Ledger")
-                    .font(.appTitle)
-
-                Text("All emergency supply receipts verified by operations supervisor, ready for client billing markup.")
-                    .font(.appSubheadline)
-                    .foregroundColor(.secondary)
-
-                ForEach(viewModel.approvedExpenses) { claim in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text(claim.vendorName)
-                                .font(.appHeadline)
-                            Spacer()
-                            Text(claim.formattedAmount)
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(Color.statusGreen)
-                        }
-
-                        Text("Ticket: \(claim.receiptNumber ?? "INV-APPROVED")")
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(14)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
-                    .cornerRadius(10)
-                }
-            }
-            .padding(16)
-        }
-        .background(Color(uiColor: .systemGroupedBackground))
-    }
 }
 
 
@@ -931,45 +882,12 @@ struct ClerkCompactView: View {
             .tag(0)
 
             NavigationStack {
-                List(viewModel.approvedExpenses) { claim in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(claim.vendorName)
-                                .font(.appHeadline)
-                            Spacer()
-                            Text(claim.formattedAmount)
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(Color.statusGreen)
-                        }
-                        Text(claim.receiptNumber ?? "INV-VERIFIED")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 4)
-                }
-                .navigationTitle("Approved Claims")
+                BillingAnalyticsView()
             }
             .tabItem {
-                Label("Claims", systemImage: "creditcard.fill")
+                Label("Dashboard", systemImage: "chart.bar.xaxis")
             }
             .tag(1)
-
-            NavigationStack {
-                VStack(spacing: 12) {
-                    Spacer()
-                    Image(systemName: "chart.bar.xaxis")
-                        .font(.system(size: 48))
-                        .foregroundColor(Color.accentBlue)
-                    Text("Revenue Telemetry")
-                        .font(.appHeadline)
-                    Spacer()
-                }
-                .navigationTitle("Charts")
-            }
-            .tabItem {
-                Label("Charts", systemImage: "chart.bar.xaxis")
-            }
-            .tag(2)
 
             NavigationStack {
                 ProfileTabView(authVM: authVM)
@@ -977,7 +895,7 @@ struct ClerkCompactView: View {
             .tabItem {
                 Label("Profile", systemImage: "person.crop.circle.fill")
             }
-            .tag(3)
+            .tag(2)
         }
         .tint(Color.brandNavy)
         .task {

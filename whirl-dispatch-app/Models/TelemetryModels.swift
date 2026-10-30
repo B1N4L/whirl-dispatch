@@ -39,8 +39,80 @@ struct LaborHoursTrendMetric: Identifiable, Equatable {
     let targetHours: Double
 }
 
+struct MonthlyRevenueMetric: Identifiable, Codable, Equatable, Hashable {
+    var id: String { month }
+    let month: String
+    let invoicedRevenue: Double
+    let grossProfit: Double
+    let targetRevenue: Double
+}
+
+struct MonthlyChartItem: Identifiable, Equatable {
+    var id: String { "\(month)-\(seriesName)" }
+    let month: String
+    let seriesName: String
+    let amount: Double
+}
+
+struct WeeklyLaborMetric: Identifiable, Codable, Equatable, Hashable {
+    let id: String
+    let day: String
+    let billableHours: Double
+    let targetHours: Double
+}
+
+struct InvoicePipelineStage: Identifiable, Codable, Equatable, Hashable {
+    let id: String
+    let stage: String
+    let count: Int
+    let totalAmount: Double
+    let colorHex: String
+
+    var formattedAmount: String {
+        AppCurrency.format(totalAmount)
+    }
+}
+
+struct DashboardSummaryKPIs: Codable, Equatable {
+    let totalInvoicedRevenue: Double
+    let totalBusinessProfit: Double
+    let totalBillableHours: Double
+    let readyToBillCount: Int
+}
+
+struct DashboardAnalyticsResponse: Codable {
+    let summary: DashboardSummaryKPIs
+    let monthlyRevenue: [MonthlyRevenueMetric]
+    let weeklyLaborHours: [WeeklyLaborMetric]
+    let pipelineStages: [InvoicePipelineStage]
+}
+
 
 enum TelemetrySampleData {
+    static let monthlyRevenueMetrics: [MonthlyRevenueMetric] = [
+        MonthlyRevenueMetric(month: "May", invoicedRevenue: 18500.0, grossProfit: 12400.0, targetRevenue: 16000.0),
+        MonthlyRevenueMetric(month: "Jun", invoicedRevenue: 22400.0, grossProfit: 15100.0, targetRevenue: 18000.0),
+        MonthlyRevenueMetric(month: "Jul", invoicedRevenue: 19800.0, grossProfit: 13200.0, targetRevenue: 18000.0),
+        MonthlyRevenueMetric(month: "Aug", invoicedRevenue: 25600.0, grossProfit: 17800.0, targetRevenue: 20000.0),
+        MonthlyRevenueMetric(month: "Sep", invoicedRevenue: 28900.0, grossProfit: 19600.0, targetRevenue: 22000.0),
+        MonthlyRevenueMetric(month: "Oct", invoicedRevenue: 31200.0, grossProfit: 21400.0, targetRevenue: 24000.0)
+    ]
+
+    static let weeklyLaborMetrics: [WeeklyLaborMetric] = [
+        WeeklyLaborMetric(id: "day-mon", day: "Mon", billableHours: 38.5, targetHours: 40.0),
+        WeeklyLaborMetric(id: "day-tue", day: "Tue", billableHours: 44.0, targetHours: 40.0),
+        WeeklyLaborMetric(id: "day-wed", day: "Wed", billableHours: 41.5, targetHours: 40.0),
+        WeeklyLaborMetric(id: "day-thu", day: "Thu", billableHours: 46.5, targetHours: 40.0),
+        WeeklyLaborMetric(id: "day-fri", day: "Fri", billableHours: 42.0, targetHours: 40.0),
+        WeeklyLaborMetric(id: "day-sat", day: "Sat", billableHours: 28.5, targetHours: 25.0),
+        WeeklyLaborMetric(id: "day-sun", day: "Sun", billableHours: 16.0, targetHours: 15.0)
+    ]
+
+    static let pipelineStages: [InvoicePipelineStage] = [
+        InvoicePipelineStage(id: "stage-ready", stage: "Ready to Bill", count: 3, totalAmount: 8550.0, colorHex: "#FF9500"),
+        InvoicePipelineStage(id: "stage-issued", stage: "Issued to Client", count: 4, totalAmount: 14200.0, colorHex: "#0F2B48"),
+        InvoicePipelineStage(id: "stage-paid", stage: "Settled & Paid", count: 7, totalAmount: 23800.0, colorHex: "#34C759")
+    ]
     static let facilityRevenueMetrics: [FacilityRevenueMetric] = [
         FacilityRevenueMetric(
             id: "rev-01",

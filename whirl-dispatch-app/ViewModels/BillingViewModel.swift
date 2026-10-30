@@ -22,7 +22,6 @@ enum BillingFilter: String, CaseIterable, Identifiable {
 final class BillingViewModel {
     var workOrders: [WorkOrder] = []
     var selectedWorkOrder: WorkOrder? = nil
-    var approvedExpenses: [ExpenseClaim] = []
     var selectedOrderApprovedExpenses: [ExpenseClaim] = []
     var invoices: [BillingInvoice] = []
 
@@ -94,16 +93,27 @@ final class BillingViewModel {
         return laborHours * hourlyRate
     }
 
+    // Direct cost base: Audited field labor + supervisor approved field expenses
+    var directCostSubtotal: Double {
+        laborSubtotal + partsSubtotal
+    }
+
+    // Markup percentage is added to the bill as a percentage from (Audited field labor + supervisor approved field expenses)
+    var markupAmount: Double {
+        directCostSubtotal * (partsMarkupPercent / 100.0)
+    }
+
+    // Legacy alias for backwards compatibility
     var partsMarkupAmount: Double {
-        partsSubtotal * (partsMarkupPercent / 100.0)
+        markupAmount
     }
 
     var partsWithMarkup: Double {
-        partsSubtotal + partsMarkupAmount
+        partsSubtotal + (partsSubtotal * (partsMarkupPercent / 100.0))
     }
 
     var subtotalBeforeTax: Double {
-        laborSubtotal + partsWithMarkup + equipmentFee
+        directCostSubtotal + markupAmount + equipmentFee
     }
 
     var calculatedTaxAmount: Double {
@@ -123,12 +133,16 @@ final class BillingViewModel {
         formatCurrency(partsSubtotal)
     }
 
+    var formattedDirectCostSubtotal: String {
+        formatCurrency(directCostSubtotal)
+    }
+
     var formattedPartsWithMarkup: String {
         formatCurrency(partsWithMarkup)
     }
 
     var formattedMarkupAmount: String {
-        formatCurrency(partsMarkupAmount)
+        formatCurrency(markupAmount)
     }
 
     var formattedEquipmentFee: String {
@@ -144,10 +158,7 @@ final class BillingViewModel {
     }
 
     private func formatCurrency(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        return formatter.string(from: NSNumber(value: value)) ?? String(format: "$%.2f", value)
+        AppCurrency.format(value)
     }
 
     // formatted plain text export for sharing
@@ -160,7 +171,7 @@ final class BillingViewModel {
                 laborLines += "   - \(item.technicianName) (\(item.roleLabel)): \(String(format: "%.1f", item.billableHours)) hrs @ \(item.formattedHourlyRate) = \(item.formattedSubtotal)\n"
             }
         } else {
-            laborLines = "   - Verified Field Crew: \(String(format: "%.1f", laborHours)) hrs @ \(String(format: "$%.2f", hourlyRate))/hr = \(formattedLaborSubtotal)\n"
+            laborLines = "   - Verified Field Crew: \(String(format: "%.1f", laborHours)) hrs @ \(AppCurrency.formatRate(hourlyRate)) = \(formattedLaborSubtotal)\n"
         }
 
         return """
@@ -210,15 +221,6 @@ final class BillingViewModel {
         } else if selectedWorkOrder == nil || !billableOrders.contains(where: { $0.id == selectedWorkOrder?.id }) {
             self.selectedWorkOrder = billableOrders.first
         }
-
-        // load approved claims from recent orders
-        var claims: [ExpenseClaim] = []
-        for order in billableOrders.prefix(4) {
-            if let res: WorkOrderExpensesResponse = try? await apiService.send(.getExpensesByWorkOrder(workOrderId: order.id)) {
-                claims.append(contentsOf: res.claims.filter { $0.approvalStatus == .approved })
-            }
-        }
-        self.approvedExpenses = claims
 
         if let selected = selectedWorkOrder {
             await fetchEstimatePreview(for: selected)

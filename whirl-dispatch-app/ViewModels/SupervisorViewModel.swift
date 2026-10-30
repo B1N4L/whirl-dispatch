@@ -569,7 +569,7 @@ final class SupervisorViewModel {
         default: shiftStatus = .available
         }
 
-        let rateText = item.hourlyLaborRate != nil ? "$\(item.hourlyLaborRate!)/hr" : "$85.00/hr"
+        let rateText = item.hourlyLaborRate != nil ? AppCurrency.formatRate(stringVal: item.hourlyLaborRate!) : AppCurrency.formatRate(85.0)
         let company = item.companyName ?? (item.facilityName != nil ? "Commercial Client" : nil)
 
         return TechnicianMember(
@@ -608,7 +608,7 @@ final class SupervisorViewModel {
                 role: .technician,
                 roleTitle: "Senior HVAC Field Tech",
                 status: .onSite,
-                hourlyRate: "$90.00/hr",
+                hourlyRate: AppCurrency.formatRate(90.0),
                 biometricEnrolled: true,
                 contactNumber: "+94 77 123 4567",
                 lastSeenText: "Plant Room B2 (5m ago)",
@@ -632,7 +632,7 @@ final class SupervisorViewModel {
                 role: .leadTechnician,
                 roleTitle: "Lead Technician",
                 status: .enRoute,
-                hourlyRate: "$105.00/hr",
+                hourlyRate: AppCurrency.formatRate(105.0),
                 biometricEnrolled: true,
                 contactNumber: "+94 71 987 6543",
                 lastSeenText: "En Route on Baseline Rd",
@@ -656,7 +656,7 @@ final class SupervisorViewModel {
                 role: .technician,
                 roleTitle: "Field Technician",
                 status: .available,
-                hourlyRate: "$85.00/hr",
+                hourlyRate: AppCurrency.formatRate(85.0),
                 biometricEnrolled: true,
                 contactNumber: "+94 76 555 1212",
                 lastSeenText: "Ready for Dispatch",
@@ -680,7 +680,7 @@ final class SupervisorViewModel {
                 role: .technician,
                 roleTitle: "Apprentice Tech",
                 status: .onSite,
-                hourlyRate: "$65.00/hr",
+                hourlyRate: AppCurrency.formatRate(65.0),
                 biometricEnrolled: true,
                 contactNumber: "+94 70 444 8989",
                 lastSeenText: "Plant Room B2",

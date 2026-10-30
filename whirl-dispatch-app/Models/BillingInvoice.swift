@@ -47,24 +47,15 @@ struct BillingInvoice: Identifiable, Codable, Equatable {
 
     // formatted currency helpers
     var formattedGrandTotal: String {
-       if let val = Double(grandTotal) {
-           return String(format: "$%.2f", val)
-       }
-       return "$\(grandTotal)"
+        AppCurrency.format(stringVal: grandTotal)
     }
 
     var formattedLaborTotal: String {
-        if let val = Double(subtotalLabor) {
-            return String(format: "$%.2f", val)
-        }
-        return "$\(subtotalLabor)"
+        AppCurrency.format(stringVal: subtotalLabor)
     }
 
     var formattedPartsTotal: String {
-        if let val = Double(subtotalPartsWithMarkup) {
-            return String(format: "$%.2f", val)
-        }
-        return "$\(subtotalPartsWithMarkup)"
+        AppCurrency.format(stringVal: subtotalPartsWithMarkup)
     }
 }
 
@@ -79,7 +70,7 @@ struct LaborBreakdownItem: Identifiable, Codable, Equatable {
     let subtotal: Double
 
     var formattedHourlyRate: String {
-        String(format: "$%.2f/hr", hourlyRate)
+        AppCurrency.formatRate(hourlyRate)
     }
 
     var formattedHours: String {
@@ -87,7 +78,7 @@ struct LaborBreakdownItem: Identifiable, Codable, Equatable {
     }
 
     var formattedSubtotal: String {
-        String(format: "$%.2f", subtotal)
+        AppCurrency.format(subtotal)
     }
 
     var roleLabel: String {

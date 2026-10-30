@@ -9,127 +9,152 @@ import SwiftUI
 import Charts
 
 struct BillingAnalyticsView: View {
-    enum TelemetryTab: String, CaseIterable, Identifiable {
-        case all = "Executive View"
-        case revenue = "Revenue (Bar)"
-        case parts = "Parts (Donut)"
-        case labor = "Labor (Trend)"
+    @State private var monthlyMetrics: [MonthlyRevenueMetric] = TelemetrySampleData.monthlyRevenueMetrics
+    @State private var laborMetrics: [WeeklyLaborMetric] = TelemetrySampleData.weeklyLaborMetrics
+    @State private var pipelineStages: [InvoicePipelineStage] = TelemetrySampleData.pipelineStages
 
-        var id: String { rawValue }
+    @State private var totalInvoicedRevenue: Double = 46550.0
+    @State private var totalBusinessProfit: Double = 31400.0
+    @State private var totalBillableHours: Double = 257.0
+    @State private var readyToBillCount: Int = 3
+
+    @State private var selectedMonthMetric: MonthlyRevenueMetric? = nil
+    @State private var selectedPipelineStage: InvoicePipelineStage? = nil
+    @State private var isLoading: Bool = false
+
+    private let apiService = APIService.shared
+
+    private var monthlyChartItems: [MonthlyChartItem] {
+        var items: [MonthlyChartItem] = []
+        for m in monthlyMetrics {
+            items.append(MonthlyChartItem(month: m.month, seriesName: "Invoiced Revenue", amount: m.invoicedRevenue))
+            items.append(MonthlyChartItem(month: m.month, seriesName: "Gross Profit", amount: m.grossProfit))
+        }
+        return items
     }
 
-    @State private var selectedTab: TelemetryTab = .all
-    @State private var metrics: [FacilityRevenueMetric] = TelemetrySampleData.facilityRevenueMetrics
-    @State private var partsMetrics: [PartsExpenseCategoryMetric] = TelemetrySampleData.partsCategoryMetrics
-    @State private var laborMetrics: [LaborHoursTrendMetric] = TelemetrySampleData.laborHoursMetrics
-    @State private var selectedMetric: FacilityRevenueMetric? = nil
-
-
-    private var totalRevenue: Double {
-        metrics.reduce(0) { $0 + $1.revenue }
+    private var targetBenchmark: Double {
+        20000.0
     }
-
-    private var averageRevenue: Double {
-        guard !metrics.isEmpty else { return 0 }
-        return totalRevenue / Double(metrics.count)
-    }
-
-    private var totalCompletedDispatches: Int {
-        metrics.reduce(0) { $0 + $1.completedWorkOrders }
-    }
-
-    private var totalPartsSpend: Double {
-        partsMetrics.reduce(0) { $0 + $1.amount }
-    }
-
-    private var totalLaborHours: Double {
-        laborMetrics.reduce(0) { $0 + $1.billableHours }
-    }
-
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 18) {
-                // telemetry segment filter
-                Picker("Telemetry Stream", selection: $selectedTab) {
-                    ForEach(TelemetryTab.allCases) { tab in
-                        Text(tab.rawValue).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 2)
+            VStack(spacing: 20) {
+                // Header overview title
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Payment Clerk Dashboard")
+                            .font(.appTitle)
+                            .foregroundColor(Color.brandNavy)
 
-                // executive kpi cards
+                        Spacer()
+
+                        if isLoading {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Button(action: {
+                                Task {
+                                    await loadDashboardData()
+                                }
+                            }) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color.brandNavy)
+                                    .padding(8)
+                                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    Text("Live billing telemetry, audited field labor utilization, and cash flow pipeline.")
+                        .font(.appSubheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // 1. Executive KPI Summary Row
                 kpiSummaryRow
 
-                // 1. facility revenue bar mark chart
-                if selectedTab == .all || selectedTab == .revenue {
-                    facilityRevenueBarChartCard
+                // 2. Chart 1: Revenue vs. Business Profit Margin (Grouped BarMark + RuleMark)
+                revenueVsProfitChartCard
 
-                    if let selected = selectedMetric {
-                        facilityDetailCalloutCard(selected)
-                    }
+                if let selected = selectedMonthMetric {
+                    monthDetailCallout(selected)
                 }
 
-                // 2. parts expense allocation donut chart (SectorMark)
-                if selectedTab == .all || selectedTab == .parts {
-                    partsExpenseDonutChartCard
-                }
+                // 3. Chart 3: Weekly Technician Labor Utilization & Hours Trend (LineMark + AreaMark + PointMark)
+                weeklyLaborUtilizationChartCard
 
-                // 3. labor hours utilization trend line chart (LineMark & AreaMark)
-                if selectedTab == .all || selectedTab == .labor {
-                    laborHoursTrendChartCard
-                }
-
-                // 4. tabular breakdown card
-                if selectedTab == .all || selectedTab == .revenue {
-                    facilityBreakdownTableCard
-                }
+                // 4. Chart 4: Invoice Pipeline & Cash Flow Distribution (Horizontal BarMark)
+                invoicePipelineChartCard
             }
-            .padding(16)
+            .padding(18)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Financial & Dispatch Telemetry")
+        .navigationTitle("Financial Dashboard")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await loadDashboardData()
+        }
     }
 
 
-    // MARK: - KPI Executive Summary Cards
+    // MARK: - Executive KPI Row
 
     private var kpiSummaryRow: some View {
-        HStack(spacing: 12) {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             kpiCard(
-                title: "Total Revenue",
-                value: "$\(Int(totalRevenue).formatted())",
-                subtitle: "6 Commercial Sites",
-                color: Color.brandNavy
+                title: "Invoiced Revenue",
+                value: formatCurrencyCompact(totalInvoicedRevenue),
+                subtitle: "Total Billed",
+                color: Color.brandNavy,
+                icon: "doc.text.fill"
             )
 
             kpiCard(
-                title: "Parts Spend",
-                value: "$\(Int(totalPartsSpend).formatted())",
-                subtitle: "5 HVAC Categories",
-                color: Color.statusAmber
+                title: "Business Profit",
+                value: formatCurrencyCompact(totalBusinessProfit),
+                subtitle: "Labor + Markup",
+                color: Color.statusGreen,
+                icon: "banknote.fill"
             )
 
             kpiCard(
-                title: "Labor Hours",
-                value: "\(Int(totalLaborHours))h",
-                subtitle: "7-Day Utilization",
-                color: Color.statusGreen
+                title: "Billable Labor",
+                value: "\(Int(totalBillableHours)) hrs",
+                subtitle: "Audited Shifts",
+                color: Color.brandNavy,
+                icon: "clock.badge.checkmark.fill"
+            )
+
+            kpiCard(
+                title: "Ready to Bill",
+                value: "\(readyToBillCount) Jobs",
+                subtitle: "Pending Invoicing",
+                color: Color.statusAmber,
+                icon: "tray.full.fill"
             )
         }
     }
 
-    private func kpiCard(title: String, value: String, subtitle: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption2)
-                .fontWeight(.bold)
-                .foregroundColor(.secondary)
+    private func kpiCard(title: String, value: String, subtitle: String, color: Color, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                    .foregroundColor(color)
+            }
 
             Text(value)
-                .font(.system(size: 17, weight: .bold, design: .monospaced))
+                .font(.system(size: 18, weight: .bold, design: .monospaced))
                 .foregroundColor(color)
 
             Text(subtitle)
@@ -143,18 +168,24 @@ struct BillingAnalyticsView: View {
     }
 
 
-    // MARK: - 1. Facility Revenue Bar Chart (BarMark)
+    // MARK: - Chart 1: Revenue vs. Business Profit Margin
 
-    private var facilityRevenueBarChartCard: some View {
+    private var revenueVsProfitChartCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("Commercial Facility Revenue Telemetry", systemImage: "chart.bar.fill")
-                    .font(.appHeadline)
-                    .foregroundColor(Color.brandNavy)
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("Revenue vs. Business Profit Margin", systemImage: "chart.bar.xaxis")
+                        .font(.appHeadline)
+                        .foregroundColor(Color.brandNavy)
+
+                    Text("Monthly comparison of total invoiced revenue against retained business profit (Option B labor + markup).")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
 
                 Spacer()
 
-                Text("BarMark")
+                Text("Grouped BarMark")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -166,32 +197,23 @@ struct BillingAnalyticsView: View {
             Divider()
 
             Chart {
-                ForEach(metrics) { item in
+                ForEach(monthlyChartItems) { item in
                     BarMark(
-                        x: .value("Facility", item.facilityCode),
-                        y: .value("Revenue ($)", item.revenue)
+                        x: .value("Month", item.month),
+                        y: .value("Amount (LKR)", item.amount)
                     )
-                    .foregroundStyle(
-                        selectedMetric?.id == item.id
-                            ? Color.statusGreen
-                            : (item.isTargetAchieved ? Color.brandNavy : Color.statusAmber)
-                    )
-                    .cornerRadius(6)
-                    .annotation(position: .top, alignment: .center) {
-                        Text("$\(Int(item.revenue / 1000))k")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundColor(.secondary)
-                    }
+                    .position(by: .value("Series", item.seriesName))
+                    .foregroundStyle(item.seriesName == "Invoiced Revenue" ? Color.brandNavy : Color.statusGreen)
+                    .cornerRadius(5)
                 }
 
-                // average revenue reference rule mark
                 RuleMark(
-                    y: .value("Average", averageRevenue)
+                    y: .value("Benchmark", targetBenchmark)
                 )
                 .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
                 .foregroundStyle(Color.statusAmber)
-                .annotation(position: .leading, alignment: .bottom) {
-                    Text("Avg $\(Int(averageRevenue))")
+                .annotation(position: .top, alignment: .leading) {
+                    Text("Target LKR 20k")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .foregroundColor(Color.statusAmber)
                         .padding(.leading, 4)
@@ -202,7 +224,7 @@ struct BillingAnalyticsView: View {
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
                     AxisValueLabel {
                         if let v = value.as(Double.self) {
-                            Text("$\(Int(v / 1000))k")
+                            Text("LKR \(Int(v / 1000))k")
                                 .font(.system(size: 9, design: .monospaced))
                         }
                     }
@@ -211,155 +233,131 @@ struct BillingAnalyticsView: View {
             .chartXAxis {
                 AxisMarks { value in
                     AxisValueLabel {
-                        if let code = value.as(String.self) {
-                            Text(code)
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        if let m = value.as(String.self) {
+                            Text(m)
+                                .font(.system(size: 11, weight: .semibold))
                         }
                     }
                 }
             }
-            .frame(height: 200)
+            .frame(height: 220)
             .padding(.top, 4)
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("Commercial Facility Revenue Telemetry Bar Chart")
-            .accessibilityHint("Displays revenue across commercial facilities. Average benchmark is $\(Int(averageRevenue)).")
+            .accessibilityLabel("Revenue vs Business Profit Grouped Bar Chart")
+            .accessibilityHint("Compares monthly invoiced revenue with net profit against the LKR 20,000 baseline target.")
 
-            // legend
+            // Legend and month selector row
             HStack(spacing: 16) {
                 HStack(spacing: 6) {
-                    Circle()
+                    RoundedRectangle(cornerRadius: 3)
                         .fill(Color.brandNavy)
-                        .frame(width: 8, height: 8)
-                    Text("Target Met")
+                        .frame(width: 10, height: 10)
+                    Text("Invoiced Revenue")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
 
                 HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color.statusAmber)
-                        .frame(width: 8, height: 8)
-                    Text("Under Target")
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.statusGreen)
+                        .frame(width: 10, height: 10)
+                    Text("Gross Profit (Labor + Markup)")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
 
                 Spacer()
 
-                Text("Tap bar to inspect")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.top, 2)
-        }
-        .padding(14)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .cornerRadius(12)
-    }
-
-
-    // MARK: - 2. Parts Category Donut Chart (SectorMark)
-
-    private var partsExpenseDonutChartCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("Parts Expense Allocation", systemImage: "chart.pie.fill")
-                    .font(.appHeadline)
-                    .foregroundColor(Color.brandNavy)
-
-                Spacer()
-
-                Text("SectorMark Donut")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.statusAmber.opacity(0.15))
-                    .foregroundColor(Color.statusAmber)
-                    .cornerRadius(4)
-            }
-
-            Divider()
-
-            ZStack {
-                Chart(partsMetrics) { part in
-                    SectorMark(
-                        angle: .value("Amount", part.amount),
-                        innerRadius: .ratio(0.62),
-                        angularInset: 2.0
-                    )
-                    .cornerRadius(5)
-                    .foregroundStyle(by: .value("Category", part.categoryName))
-                }
-                .chartLegend(.hidden)
-                .frame(height: 190)
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("Parts Expense Allocation Donut Chart")
-                .accessibilityHint("Total parts spend $\(Int(totalPartsSpend)).")
-
-                // centered donut metric summary
-                VStack(spacing: 2) {
-                    Text("$\(Int(totalPartsSpend).formatted())")
-                        .font(.system(size: 18, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color.brandNavy)
-                    Text("Wholesale Parts")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            Divider()
-
-            // parts category breakdown items
-            VStack(spacing: 8) {
-                ForEach(partsMetrics) { item in
-                    let pct = Int((item.amount / totalPartsSpend) * 100)
-                    HStack {
-                        Circle()
-                            .fill(categoryColor(for: item.categoryName))
-                            .frame(width: 8, height: 8)
-
-                        Text(item.categoryName)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.primary)
-
-                        Spacer()
-
-                        Text("\(pct)%")
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.secondary)
-
-                        Text("$\(Int(item.amount).formatted())")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color.brandNavy)
-                            .frame(width: 70, alignment: .trailing)
+                HStack(spacing: 4) {
+                    ForEach(monthlyMetrics) { m in
+                        Button(action: {
+                            if selectedMonthMetric?.month == m.month {
+                                selectedMonthMetric = nil
+                            } else {
+                                selectedMonthMetric = m
+                            }
+                        }) {
+                            Text(m.month)
+                                .font(.system(size: 9, weight: .bold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(
+                                    selectedMonthMetric?.month == m.month
+                                        ? Color.brandNavy
+                                        : Color(uiColor: .tertiarySystemGroupedBackground)
+                                )
+                                .foregroundColor(
+                                    selectedMonthMetric?.month == m.month
+                                        ? .white
+                                        : .secondary
+                                )
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
         }
-        .padding(14)
+        .padding(16)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .cornerRadius(12)
     }
 
-    private func categoryColor(for name: String) -> Color {
-        switch name {
-        case "Compressor Motors": return Color.brandNavy
-        case "Refrigerant & Valves": return Color.accentBlue
-        case "Electrical Controls": return Color.statusAmber
-        case "Condenser Airflow": return Color.statusGreen
-        default: return Color.gray
+    private func monthDetailCallout(_ metric: MonthlyRevenueMetric) -> some View {
+        let marginPct = metric.invoicedRevenue > 0
+            ? Int((metric.grossProfit / metric.invoicedRevenue) * 100)
+            : 0
+
+        return HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(metric.month) Performance Detail")
+                    .font(.appSubheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(Color.brandNavy)
+
+                Text("Target Status: \(metric.invoicedRevenue >= metric.targetRevenue ? "Target Achieved" : "Under Target")")
+                    .font(.caption2)
+                    .foregroundColor(metric.invoicedRevenue >= metric.targetRevenue ? Color.statusGreen : Color.statusAmber)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Invoiced: LKR \(Int(metric.invoicedRevenue).formatted())")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.primary)
+
+                Text("Profit: LKR \(Int(metric.grossProfit).formatted()) (\(marginPct)% margin)")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(Color.statusGreen)
+            }
+
+            Button(action: { selectedMonthMetric = nil }) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
         }
+        .padding(12)
+        .background(Color.statusGreen.opacity(0.10))
+        .cornerRadius(8)
     }
 
 
-    // MARK: - 3. Labor Hours Trend Line Chart (LineMark & AreaMark)
+    // MARK: - Chart 3: Weekly Technician Labor Utilization & Hours Trend
 
-    private var laborHoursTrendChartCard: some View {
+    private var weeklyLaborUtilizationChartCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("Technician Labor Hours Trend", systemImage: "chart.line.uptrend.xyaxis")
-                    .font(.appHeadline)
-                    .foregroundColor(Color.brandNavy)
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("Weekly Technician Labor Hours Trend", systemImage: "chart.line.uptrend.xyaxis")
+                        .font(.appHeadline)
+                        .foregroundColor(Color.brandNavy)
+
+                    Text("Audited shift duration across the field crew benchmarked against 40-hour weekly shift capacity.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
 
                 Spacer()
 
@@ -376,32 +374,29 @@ struct BillingAnalyticsView: View {
 
             Chart {
                 ForEach(laborMetrics) { metric in
-                    // gradient area fill under curve
                     AreaMark(
-                        x: .value("Day", metric.dayLabel),
+                        x: .value("Day", metric.day),
                         y: .value("Hours", metric.billableHours)
                     )
                     .interpolationMethod(.catmullRom)
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color.statusGreen.opacity(0.28), Color.statusGreen.opacity(0.02)],
+                            colors: [Color.statusGreen.opacity(0.30), Color.statusGreen.opacity(0.02)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
 
-                    // trend curve line
                     LineMark(
-                        x: .value("Day", metric.dayLabel),
+                        x: .value("Day", metric.day),
                         y: .value("Hours", metric.billableHours)
                     )
                     .interpolationMethod(.catmullRom)
                     .foregroundStyle(Color.statusGreen)
                     .lineStyle(StrokeStyle(lineWidth: 2.5))
 
-                    // point marks on each day
                     PointMark(
-                        x: .value("Day", metric.dayLabel),
+                        x: .value("Day", metric.day),
                         y: .value("Hours", metric.billableHours)
                     )
                     .foregroundStyle(Color.brandNavy)
@@ -412,14 +407,13 @@ struct BillingAnalyticsView: View {
                     }
                 }
 
-                // 40 hours target weekly pace threshold rule
                 RuleMark(
                     y: .value("Target Shift", 40.0)
                 )
                 .lineStyle(StrokeStyle(lineWidth: 1.2, dash: [4, 4]))
                 .foregroundStyle(Color.statusAmber)
                 .annotation(position: .leading, alignment: .bottom) {
-                    Text("40h Target")
+                    Text("40h Capacity")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .foregroundColor(Color.statusAmber)
                         .padding(.leading, 4)
@@ -441,160 +435,189 @@ struct BillingAnalyticsView: View {
                     AxisValueLabel {
                         if let day = value.as(String.self) {
                             Text(day)
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(size: 11, weight: .semibold))
                         }
                     }
                 }
             }
-            .frame(height: 190)
+            .frame(height: 200)
             .padding(.top, 4)
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("Technician Labor Hours Trend Line Chart")
-            .accessibilityHint("Shows weekly billable labor hours trend against the 40-hour target.")
+            .accessibilityLabel("Weekly Technician Labor Hours Trend Curve")
+            .accessibilityHint("Displays daily on-site technician hours with a Catmull-Rom curve against a 40-hour shift target.")
 
             HStack {
-                Circle()
-                    .fill(Color.statusGreen)
-                    .frame(width: 8, height: 8)
-                Text("Billable Hours Logged")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color.statusGreen)
+                        .frame(width: 8, height: 8)
+                    Text("Audited On-Site Hours")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
 
                 Spacer()
 
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     Rectangle()
                         .fill(Color.statusAmber)
                         .frame(width: 12, height: 2)
-                    Text("Baseline Capacity (40h)")
+                    Text("Standard Capacity (40h)")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
             }
         }
-        .padding(14)
+        .padding(16)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .cornerRadius(12)
     }
 
 
-    // MARK: - Facility Detail Callout
+    // MARK: - Chart 4: Invoice Pipeline & Cash Flow Distribution
 
-    private func facilityDetailCalloutCard(_ item: FacilityRevenueMetric) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private var invoicePipelineChartCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.facilityName)
+                    Label("Invoice Pipeline & Cash Flow Distribution", systemImage: "tray.full.fill")
                         .font(.appHeadline)
-                        .fontWeight(.bold)
-                    Text(item.billingCategory)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-
-                Button(action: {
-                    selectedMetric = nil
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            Divider()
-
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Total Invoiced")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text("$\(Int(item.revenue).formatted())")
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(Color.brandNavy)
-                }
 
-                Spacer()
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Target")
+                    Text("Active dispatches and commercial invoices segmented by lifecycle stage.")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text("$\(Int(item.targetRevenue).formatted())")
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
 
                 Spacer()
 
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Dispatches")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text("\(item.completedWorkOrders) Jobs")
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(Color.statusGreen)
-                }
+                Text("Horizontal BarMark")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.statusAmber.opacity(0.15))
+                    .foregroundColor(Color.statusAmber)
+                    .cornerRadius(4)
             }
-        }
-        .padding(14)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.statusGreen.opacity(0.4), lineWidth: 1.5)
-        )
-    }
-
-
-    // MARK: - Facility Breakdown Table
-
-    private var facilityBreakdownTableCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Facility Breakdown Ledger", systemImage: "list.clipboard")
-                .font(.appSubheadline)
-                .fontWeight(.bold)
-                .foregroundColor(Color.brandNavy)
 
             Divider()
 
-            ForEach(metrics) { item in
-                Button(action: {
-                    selectedMetric = (selectedMetric?.id == item.id ? nil : item)
-                }) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(item.facilityName)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.primary)
-                            Text("\(item.facilityCode) • \(item.completedWorkOrders) dispatches")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Spacer()
-
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("$\(Int(item.revenue).formatted())")
-                                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                                .foregroundColor(item.isTargetAchieved ? Color.statusGreen : Color.statusAmber)
-
-                            Text(item.isTargetAchieved ? "+$\(Int(item.revenue - item.targetRevenue))" : "-$\(Int(item.targetRevenue - item.revenue))")
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(.secondary)
+            Chart {
+                ForEach(pipelineStages) { stage in
+                    BarMark(
+                        x: .value("Amount (LKR)", stage.totalAmount),
+                        y: .value("Stage", stage.stage)
+                    )
+                    .foregroundStyle(stageColor(for: stage.stage))
+                    .cornerRadius(6)
+                    .annotation(position: .trailing, alignment: .leading) {
+                        Text("\(stage.formattedAmount) (\(stage.count) jobs)")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 6)
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text("LKR \(Int(v / 1000))k")
+                                .font(.system(size: 9, design: .monospaced))
                         }
                     }
-                    .padding(.vertical, 4)
                 }
-                .buttonStyle(.plain)
+            }
+            .chartYAxis {
+                AxisMarks { value in
+                    AxisValueLabel {
+                        if let s = value.as(String.self) {
+                            Text(s)
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                    }
+                }
+            }
+            .frame(height: 140)
+            .padding(.top, 4)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Invoice Pipeline Horizontal Bar Chart")
+            .accessibilityHint("Visualizes amount and jobs locked in Ready to Bill, Issued, and Paid stages.")
 
-                if item.id != metrics.last?.id {
-                    Divider()
+            Divider()
+
+            // Stage cards row
+            HStack(spacing: 12) {
+                ForEach(pipelineStages) { stage in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(stageColor(for: stage.stage))
+                                .frame(width: 8, height: 8)
+                            Text(stage.stage)
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                        }
+
+                        Text(stage.formattedAmount)
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(stageColor(for: stage.stage))
+
+                        Text("\(stage.count) Dispatches")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                    .cornerRadius(8)
                 }
             }
         }
-        .padding(14)
+        .padding(16)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .cornerRadius(12)
+    }
+
+    private func stageColor(for stage: String) -> Color {
+        switch stage {
+        case "Ready to Bill": return Color.statusAmber
+        case "Issued to Client": return Color.brandNavy
+        case "Settled & Paid": return Color.statusGreen
+        default: return Color.gray
+        }
+    }
+
+
+    // MARK: - Data Loading
+
+    private func loadDashboardData() async {
+        isLoading = true
+        do {
+            let res: DashboardAnalyticsResponse = try await apiService.send(.getDashboardAnalytics)
+            self.totalInvoicedRevenue = res.summary.totalInvoicedRevenue
+            self.totalBusinessProfit = res.summary.totalBusinessProfit
+            self.totalBillableHours = res.summary.totalBillableHours
+            self.readyToBillCount = res.summary.readyToBillCount
+
+            if !res.monthlyRevenue.isEmpty {
+                self.monthlyMetrics = res.monthlyRevenue
+            }
+            if !res.weeklyLaborHours.isEmpty {
+                self.laborMetrics = res.weeklyLaborHours
+            }
+            if !res.pipelineStages.isEmpty {
+                self.pipelineStages = res.pipelineStages
+            }
+        } catch {
+            // fallback: retain TelemetrySampleData defaults
+        }
+        isLoading = false
+    }
+
+    private func formatCurrencyCompact(_ value: Double) -> String {
+        AppCurrency.formatCompact(value)
     }
 }

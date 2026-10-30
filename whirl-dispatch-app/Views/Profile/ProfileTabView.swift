@@ -208,9 +208,9 @@ struct ProfileTabView: View {
 
                     if let rate = user.hourlyLaborRate {
                         HStack {
-                            Label("Contract Rate", systemImage: "dollarsign.circle.fill")
+                            Label("Contract Rate", systemImage: "banknote.fill")
                             Spacer()
-                            Text("$\(rate) / hr")
+                            Text(AppCurrency.formatRate(stringVal: rate))
                                 .font(.appMono)
                                 .fontWeight(.semibold)
                                 .foregroundColor(Color.brandNavy)
@@ -256,16 +256,11 @@ struct ProfileTabView: View {
                         .foregroundColor(Color.statusRed)
                     }
                 } footer: {
-                    VStack(spacing: 4) {
-                        Text("WhirlDispatch HVAC Mobile Client v1.0.0")
-                            .font(.caption2)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                        Text("NIBM / Coventry University Computing Coursework")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                    .padding(.top, 8)
+                    Text("WhirlDispatch HVAC Mobile Client v1.0.0")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 8)
                 }
             }
         }

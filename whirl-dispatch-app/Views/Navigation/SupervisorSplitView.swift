@@ -441,7 +441,7 @@ struct SupervisorSplitView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "exclamationmark.shield.fill")
                                     .font(.system(size: 10))
-                                Text("Optical Inspection Required (>$250)")
+                                Text("Optical Inspection Required (>LKR 250)")
                                     .font(.system(size: 10, weight: .semibold))
                             }
                             .foregroundColor(Color.statusAmber)
@@ -1123,7 +1123,7 @@ struct SupervisorSplitView: View {
                                     Text("\(item.quantity)x \(item.partDescription)")
                                         .font(.system(size: 12, design: .monospaced))
                                     Spacer()
-                                    Text("$\(item.totalPrice)")
+                                    Text(item.formattedTotalPrice)
                                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                                 }
                             }
@@ -1170,7 +1170,7 @@ struct SupervisorSplitView: View {
                             .foregroundColor(Color.statusAmber)
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Optical Review Threshold Exceeded ($250.00 Limit)")
+                            Text("Optical Review Threshold Exceeded (LKR 250.00 Limit)")
                                 .font(.appSubheadline)
                                 .fontWeight(.semibold)
                                 .foregroundColor(Color.statusAmber)
@@ -1344,7 +1344,7 @@ struct SupervisorSplitView: View {
                             Text("Hourly Labor Rate")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            Text(tech.hourlyRate ?? "$85.00/hr")
+                            Text(tech.hourlyRate != nil ? AppCurrency.formatRate(stringVal: tech.hourlyRate!) : "LKR 85.00/hr")
                                 .font(.system(size: 13, weight: .bold, design: .monospaced))
                                 .foregroundColor(Color.brandNavy)
                         }

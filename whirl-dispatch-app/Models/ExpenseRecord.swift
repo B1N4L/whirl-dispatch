@@ -68,6 +68,14 @@ struct ExpenseItem: Identifiable, Codable, Equatable, Hashable {
     let unitPrice: String
     let totalPrice: String
 
+    var formattedUnitPrice: String {
+        AppCurrency.format(stringVal: unitPrice)
+    }
+
+    var formattedTotalPrice: String {
+        AppCurrency.format(stringVal: totalPrice)
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, expenseClaimId, partDescription, quantity, unitPrice, totalPrice
     }
@@ -289,10 +297,7 @@ struct ExpenseClaim: Identifiable, Codable, Equatable, Hashable {
 
     // display formatted amount
     var formattedAmount: String {
-      if let val = Double(totalAmount) {
-          return String(format: "$%.2f", val)
-      }
-      return "$\(totalAmount)"
+        AppCurrency.format(stringVal: totalAmount)
     }
 }
 

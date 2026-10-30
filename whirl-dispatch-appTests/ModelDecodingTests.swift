@@ -242,7 +242,7 @@ struct ModelDecodingTests {
         #expect(claim.approvalStatus.label == "Approved")
         #expect(claim.items?.count == 2)
         #expect(claim.items?.first?.partDescription == "Square-D 3-Pole 40A Contactor")
-        #expect(claim.formattedAmount == "$245.50")
+        #expect(claim.formattedAmount == "LKR 245.50")
     }
 
 
@@ -274,9 +274,9 @@ struct ModelDecodingTests {
 
         #expect(invoice.invoiceNumber == "INV-2026-0901")
         #expect(invoice.status == .issuedToClient)
-        #expect(invoice.formattedGrandTotal == "$779.87")
-        #expect(invoice.formattedLaborTotal == "$382.50")
-        #expect(invoice.formattedPartsTotal == "$294.60")
+        #expect(invoice.formattedGrandTotal == "LKR 779.87")
+        #expect(invoice.formattedLaborTotal == "LKR 382.50")
+        #expect(invoice.formattedPartsTotal == "LKR 294.60")
     }
 
 

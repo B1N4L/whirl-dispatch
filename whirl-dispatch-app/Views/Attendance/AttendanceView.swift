@@ -47,130 +47,8 @@ struct AttendanceView: View {
                     }
 
 
-                    // work order facility picker card
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Active Workplace Site")
-                            .font(.appSubheadline)
-                            .fontWeight(.bold)
-                            .foregroundColor(.secondary)
-
-                        if viewModel.assignedWorkOrders.isEmpty {
-                            VStack(alignment: .leading, spacing: 10) {
-                                HStack(spacing: 12) {
-                                    ZStack {
-                                        Circle()
-                                            .fill(Color(hex: "607D8B").opacity(0.12))
-                                            .frame(width: 40, height: 40)
-
-                                        Image(systemName: "calendar.badge.exclamationmark")
-                                            .font(.system(size: 18))
-                                            .foregroundColor(Color(hex: "455A64"))
-                                    }
-
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("No Active Dispatches")
-                                            .font(.appHeadline)
-                                            .fontWeight(.bold)
-                                            .foregroundColor(.primary)
-
-                                        Text("You are not currently scheduled for any work orders.")
-                                            .font(.appCaption)
-                                            .foregroundColor(.secondary)
-                                    }
-
-                                    Spacer()
-                                }
-
-                                HStack {
-                                    Text("Awaiting dispatch assignment from supervisor or dispatcher.")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-
-                                    Spacer()
-
-                                    Button(action: {
-                                        Task {
-                                            await viewModel.loadAttendanceData()
-                                        }
-                                    }) {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "arrow.clockwise")
-                                                .font(.caption2.bold())
-                                            Text("Refresh")
-                                                .font(.caption2.bold())
-                                        }
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(Color.brandNavy.opacity(0.1))
-                                        .foregroundColor(Color.brandNavy)
-                                        .cornerRadius(6)
-                                    }
-                                }
-                            }
-                            .padding(14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.cardBackground)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.surfaceBorder, lineWidth: 1)
-                            )
-                        } else {
-                            Menu {
-                                ForEach(viewModel.assignedWorkOrders) { order in
-                                    Button(action: {
-                                        Task {
-                                            await viewModel.selectWorkOrder(order)
-                                        }
-                                    }) {
-                                        HStack {
-                                            Text("\(order.workOrderNumber): \(order.facility?.facilityName ?? order.title)")
-                                            if viewModel.selectedWorkOrder?.id == order.id {
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(viewModel.selectedWorkOrder?.facility?.facilityName ?? "Select Workplace Facility")
-                                            .font(.appHeadline)
-                                            .fontWeight(.bold)
-                                            .foregroundColor(.primary)
-
-                                        Text(viewModel.isClockedIn ? "Active shift in progress (facility locked)" : (viewModel.selectedWorkOrder?.facility?.companyName ?? "Tap to switch facility"))
-                                            .font(.appCaption)
-                                            .foregroundColor(.secondary)
-                                    }
-
-                                    Spacer()
-
-                                    if !viewModel.isClockedIn {
-                                        Image(systemName: "chevron.up.chevron.down")
-                                            .font(.caption)
-                                            .foregroundColor(Color.accentBlue)
-                                    } else {
-                                        Image(systemName: "lock.fill")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                .padding(14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Color.cardBackground)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(Color.surfaceBorder, lineWidth: 1)
-                                )
-                            }
-                            .disabled(viewModel.isClockedIn)
-                        }
-                    }
-                    .padding(.horizontal, 16)
+                    // work order facility card
+                    activeWorkplaceSiteSection
 
                     // View Employees Button for Lead Technician & Supervisor
                     if isLeadOrSupervisor, let order = viewModel.selectedWorkOrder {
@@ -529,6 +407,185 @@ struct AttendanceView: View {
           RoundedRectangle(cornerRadius: 12, style: .continuous)
               .fill(Color.cardBackground)
       )
+    }
+
+
+    // MARK: - Active Workplace Site Section
+
+    @ViewBuilder
+    private var activeWorkplaceSiteSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Active Workplace Site")
+                .font(.appSubheadline)
+                .fontWeight(.bold)
+                .foregroundColor(.secondary)
+
+            if let order = viewModel.selectedWorkOrder {
+                assignedSiteCard(for: order)
+            } else {
+                standbySiteCard
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    @ViewBuilder
+    private func assignedSiteCard(for order: WorkOrder) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(order.workOrderNumber)
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Color.brandNavy.opacity(0.12))
+                            .foregroundColor(Color.brandNavy)
+                            .cornerRadius(4)
+
+                        Text(order.status.label)
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Text(order.facility?.facilityName ?? "Assigned Facility")
+                        .font(.appHeadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+
+                    if let address = order.facility?.address {
+                        Text(address)
+                            .font(.appCaption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: viewModel.isClockedIn ? "lock.fill" : "mappin.circle.fill")
+                            .font(.caption)
+                        Text(viewModel.isClockedIn ? "Active Shift" : "Assigned Site")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundColor(viewModel.isClockedIn ? Color.statusGreen : Color.brandNavy)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background((viewModel.isClockedIn ? Color.statusGreen : Color.brandNavy).opacity(0.1))
+                    .cornerRadius(6)
+                }
+            }
+
+            Divider()
+
+            HStack {
+                Text(viewModel.isClockedIn
+                     ? "Facility locked to active shift in progress"
+                     : (order.facility?.companyName ?? "Supervisor designated dispatch location"))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Button(action: {
+                    Task {
+                        await viewModel.loadAttendanceData()
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption2.bold())
+                        Text("Refresh")
+                            .font(.caption2.bold())
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.brandNavy.opacity(0.08))
+                    .foregroundColor(Color.brandNavy)
+                    .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.surfaceBorder, lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
+    private var standbySiteCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color(hex: "607D8B").opacity(0.12))
+                        .frame(width: 40, height: 40)
+
+                    Image(systemName: "calendar.badge.exclamationmark")
+                        .font(.system(size: 18))
+                        .foregroundColor(Color(hex: "455A64"))
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("No Active Dispatches")
+                        .font(.appHeadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+
+                    Text("You are not currently scheduled for any work orders.")
+                        .font(.appCaption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+
+            HStack {
+                Text("Awaiting dispatch assignment from supervisor or dispatcher.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Button(action: {
+                    Task {
+                        await viewModel.loadAttendanceData()
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption2.bold())
+                        Text("Refresh")
+                            .font(.caption2.bold())
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.brandNavy.opacity(0.1))
+                    .foregroundColor(Color.brandNavy)
+                    .cornerRadius(6)
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.surfaceBorder, lineWidth: 1)
+        )
     }
 
 
