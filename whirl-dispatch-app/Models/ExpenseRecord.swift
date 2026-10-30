@@ -299,6 +299,10 @@ struct ExpenseClaim: Identifiable, Codable, Equatable, Hashable {
     var formattedAmount: String {
         AppCurrency.format(stringVal: totalAmount)
     }
+
+    var formattedCapturedDate: String {
+        AppDateFormatter.formatDate(receiptCapturedAt)
+    }
 }
 
 

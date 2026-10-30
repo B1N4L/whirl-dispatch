@@ -928,8 +928,8 @@ struct SupervisorSplitView: View {
                             Text("Target Arrival")
                                 .font(.appCaption)
                                 .foregroundColor(.secondary)
-                            Text(order.scheduledStartTime.prefix(16))
-                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            Text(order.formattedScheduledStartTime)
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
                         }
 
                         Spacer()
@@ -938,8 +938,8 @@ struct SupervisorSplitView: View {
                             Text("Target Wrap-Up")
                                 .font(.appCaption)
                                 .foregroundColor(.secondary)
-                            Text(order.scheduledEndTime.prefix(16))
-                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            Text(order.formattedScheduledEndTime)
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
                         }
                     }
                 }
@@ -998,8 +998,8 @@ struct SupervisorSplitView: View {
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundColor(.secondary)
 
-                            if let dt = claim.receiptCapturedAt {
-                                Text("• \(dt.prefix(10))")
+                            if claim.receiptCapturedAt != nil {
+                                Text("• \(claim.formattedCapturedDate)")
                                     .font(.appCaption)
                                     .foregroundColor(.secondary)
                             }
@@ -1475,8 +1475,8 @@ struct SupervisorSplitView: View {
                             Spacer()
 
                             if let start = tech.activeWorkOrderScheduledStart {
-                                Text("Shift: \(start.prefix(16))")
-                                    .font(.system(size: 11, design: .monospaced))
+                                Text("Shift: \(AppDateFormatter.formatDateTime(start))")
+                                    .font(.system(size: 11, weight: .medium, design: .rounded))
                                     .foregroundColor(.secondary)
                             }
                         }

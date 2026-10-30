@@ -151,7 +151,7 @@ final class AttendanceViewModel {
                         }
                     }
 
-                    if let clockInDate = ISO8601DateFormatter().date(from: active.clockInTimestamp) {
+                    if let clockInDate = AppDateFormatter.parse(active.clockInTimestamp) {
                         let totalElapsed = Int(Date().timeIntervalSince(clockInDate))
                         self.elapsedSeconds = max(0, totalElapsed - active.totalBreakSeconds)
                     } else {
@@ -188,7 +188,7 @@ final class AttendanceViewModel {
                     self.selectedWorkOrder = matchingOrder
                 }
 
-                if let clockInDate = ISO8601DateFormatter().date(from: activeCached.clockInTimestamp) {
+                if let clockInDate = AppDateFormatter.parse(activeCached.clockInTimestamp) {
                     let totalElapsed = Int(Date().timeIntervalSince(clockInDate))
                     self.elapsedSeconds = max(0, totalElapsed - activeCached.totalBreakSeconds)
                 } else {
@@ -202,7 +202,7 @@ final class AttendanceViewModel {
                 self.isClockedIn = true
                 self.isOnBreak = (cached.sessionStatus == .onBreakViolation)
 
-                if let clockInDate = ISO8601DateFormatter().date(from: cached.clockInTimestamp) {
+                if let clockInDate = AppDateFormatter.parse(cached.clockInTimestamp) {
                     let totalElapsed = Int(Date().timeIntervalSince(clockInDate))
                     self.elapsedSeconds = max(0, totalElapsed - cached.totalBreakSeconds)
                 } else {
@@ -233,7 +233,7 @@ final class AttendanceViewModel {
                         self.isClockedIn = true
                         self.isOnBreak = (openSession.sessionStatus == .onBreakViolation)
 
-                        if let clockInDate = ISO8601DateFormatter().date(from: openSession.clockInTimestamp) {
+                        if let clockInDate = AppDateFormatter.parse(openSession.clockInTimestamp) {
                             let totalElapsed = Int(Date().timeIntervalSince(clockInDate))
                             self.elapsedSeconds = max(0, totalElapsed - openSession.totalBreakSeconds)
                         } else {
@@ -511,7 +511,7 @@ final class AttendanceViewModel {
 
     // sync shift state to home screen widget
     func syncWidgetState() {
-        let clockInDate: Date? = isClockedIn ? currentSession.flatMap { ISO8601DateFormatter().date(from: $0.clockInTimestamp) } : nil
+        let clockInDate: Date? = isClockedIn ? currentSession.flatMap { AppDateFormatter.parse($0.clockInTimestamp) } : nil
 
         WidgetSyncManager.shared.syncShift(
             isClockedIn: isClockedIn,

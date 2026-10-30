@@ -170,20 +170,7 @@ final class CalendarSyncService: @unchecked Sendable {
 
 
     private func parseDate(_ dateStr: String) -> Date? {
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = isoFormatter.date(from: dateStr) {
-            return d
-        }
-
-        let fallbackFormatter = ISO8601DateFormatter()
-        if let d = fallbackFormatter.date(from: dateStr) {
-            return d
-        }
-
-        let customFormatter = DateFormatter()
-        customFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-        return customFormatter.date(from: dateStr)
+        AppDateFormatter.parse(dateStr)
     }
 
 

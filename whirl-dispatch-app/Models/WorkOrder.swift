@@ -77,6 +77,18 @@ struct WorkOrder: Identifiable, Codable, Equatable, Hashable {
     var canClockIn: Bool {
         status == .dispatched || status == .enRoute
     }
+
+    var formattedScheduledStartTime: String {
+        AppDateFormatter.formatDateTime(scheduledStartTime)
+    }
+
+    var formattedScheduledEndTime: String {
+        AppDateFormatter.formatDateTime(scheduledEndTime)
+    }
+
+    var formattedScheduledWindow: String {
+        AppDateFormatter.formatWindow(start: scheduledStartTime, end: scheduledEndTime)
+    }
 }
 
 

@@ -373,12 +373,12 @@ struct AttendanceView: View {
     private func shiftHistoryRow(record: AttendanceRecord) -> some View {
       HStack(alignment: .center) {
           VStack(alignment: .leading, spacing: 3) {
-              Text(formatTimestamp(record.clockInTimestamp))
+              Text(record.formattedClockIn)
                   .font(.appSubheadline)
                   .fontWeight(.medium)
                   .foregroundColor(.primary)
 
-              Text(record.clockOutTimestamp != nil ? "Clocked out: \(formatTimestamp(record.clockOutTimestamp!))" : "In Progress")
+              Text(record.formattedClockOut != nil ? "Clocked out: \(record.formattedClockOut!)" : "In Progress")
                   .font(.caption2)
                   .foregroundColor(.secondary)
           }
@@ -589,16 +589,6 @@ struct AttendanceView: View {
     }
 
 
-    // format iso timestamp helper
-    private func formatTimestamp(_ iso: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        if let d = formatter.date(from: iso) {
-            let df = DateFormatter()
-            df.dateFormat = "MMM d, h:mm a"
-            return df.string(from: d)
-        }
-        return iso
-    }
 }
 
 

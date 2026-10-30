@@ -181,7 +181,7 @@ final class BillingViewModel {
         ==================================================
         Invoice #:   \(currentInvoiceNumber)
         Work Order:  \(order.workOrderNumber)
-        Date:        \(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        Date:        \(AppDateFormatter.formatDate(ISO8601DateFormatter().string(from: Date())))
         Terms:       Net 30 Days
 
         CLIENT DETAILS:

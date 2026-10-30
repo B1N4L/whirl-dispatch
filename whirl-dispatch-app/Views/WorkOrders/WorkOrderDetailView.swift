@@ -195,7 +195,7 @@ struct WorkOrderDetailView: View {
                         .foregroundColor(.secondary)
 
                     VStack(spacing: 12) {
-                        specRow(label: "Scheduled Window", value: "\(order.scheduledStartTime) to \(order.scheduledEndTime)")
+                        specRow(label: "Scheduled Window", value: order.formattedScheduledWindow)
                         specRow(label: "Lead Technician ID", value: order.leadTechnicianId)
                         if let assetId = order.assignedFleetAssetId {
                             specRow(label: "Fleet Van Unit", value: assetId)

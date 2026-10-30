@@ -99,7 +99,7 @@ struct WorkOrderCardView: View {
                         .font(.caption2)
                         .foregroundColor(.secondary)
 
-                    Text(formatScheduledTime(order.scheduledStartTime))
+                    Text(order.formattedScheduledStartTime)
                         .font(.appCaption)
                         .foregroundColor(.secondary)
                 }
@@ -132,17 +132,5 @@ struct WorkOrderCardView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(order.workOrderNumber): \(order.title). Priority: \(order.priority.rawValue). Status: \(order.status.rawValue). Facility: \(order.facility?.displayName ?? "Unknown facility")")
         .accessibilityHint("Double tap to open work order details")
-    }
-
-
-    // simple date parser for scheduled timestamp
-    private func formatScheduledTime(_ isoString: String) -> String {
-      let isoFormatter = ISO8601DateFormatter()
-      if let date = isoFormatter.date(from: isoString) {
-          let displayFormatter = DateFormatter()
-          displayFormatter.dateFormat = "MMM d, h:mm a"
-          return displayFormatter.string(from: date)
-      }
-      return isoString
     }
 }

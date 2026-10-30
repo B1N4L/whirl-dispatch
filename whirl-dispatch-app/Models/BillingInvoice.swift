@@ -57,6 +57,14 @@ struct BillingInvoice: Identifiable, Codable, Equatable {
     var formattedPartsTotal: String {
         AppCurrency.format(stringVal: subtotalPartsWithMarkup)
     }
+
+    var formattedIssueDate: String {
+        AppDateFormatter.formatDate(issueDate)
+    }
+
+    var formattedDueDate: String {
+        AppDateFormatter.formatDate(dueDate)
+    }
 }
 
 

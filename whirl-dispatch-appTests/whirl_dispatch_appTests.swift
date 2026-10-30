@@ -100,13 +100,15 @@ struct whirl_dispatch_appTests {
             taxAmount: "56.20",
             grandTotal: "758.70",
             status: .draftEstimate,
-            issueDate: nil,
+            issueDate: "2026-10-30",
             dueDate: nil
         )
 
         #expect(invoice.formattedGrandTotal == "LKR 758.70")
         #expect(invoice.formattedLaborTotal == "LKR 412.50")
         #expect(invoice.formattedPartsTotal == "LKR 240.00")
+        #expect(invoice.formattedIssueDate.contains("2026"))
+        #expect(invoice.formattedDueDate == "N/A")
     }
 
     @Test func testAppCurrencyFormatting() {
@@ -121,6 +123,39 @@ struct whirl_dispatch_appTests {
         #expect(AppCurrency.sanitizePriceInput("LKR 250.00") == 250.00)
         #expect(AppCurrency.sanitizePriceInput("$120.50") == 120.50)
         #expect(AppCurrency.sanitizePriceInput("Rs. 450") == 450.00)
+    }
+
+    @Test func testAppDateFormatterParsingAndDisplay() {
+        // 1. Parsing ISO with fractional seconds (PostgreSQL default)
+        let fractionalDate = AppDateFormatter.parse("2026-10-30T06:37:37.787Z")
+        #expect(fractionalDate != nil)
+
+        // 2. Parsing ISO standard
+        let standardDate = AppDateFormatter.parse("2026-10-27T08:00:00Z")
+        #expect(standardDate != nil)
+
+        // 3. Parsing date only
+        let dateOnly = AppDateFormatter.parse("2026-10-30")
+        #expect(dateOnly != nil)
+
+        // 4. Formatted date human-readable
+        let formattedDate = AppDateFormatter.formatDate("2026-10-30")
+        #expect(formattedDate.contains("2026"))
+        #expect(formattedDate.contains("Oct") || formattedDate.contains("10"))
+
+        // 5. Formatted date time human-readable
+        let formattedDateTime = AppDateFormatter.formatDateTime("2026-10-27T08:00:00Z")
+        #expect(!formattedDateTime.contains("T"))
+        #expect(!formattedDateTime.contains(".000Z"))
+
+        // 6. Formatted window
+        let window = AppDateFormatter.formatWindow(start: "2026-10-27T08:00:00Z", end: "2026-10-27T12:00:00Z")
+        #expect(!window.contains("T"))
+        #expect(window.contains("–"))
+
+        // 7. Nil / empty resilience
+        #expect(AppDateFormatter.formatDate(nil) == "N/A")
+        #expect(AppDateFormatter.formatDateTime("") == "N/A")
     }
 
 

@@ -43,6 +43,14 @@ struct AttendanceRecord: Identifiable, Codable, Equatable {
     var isCurrentlyOnSite: Bool {
         sessionStatus == .activeOnSite || sessionStatus == .clockedIn
     }
+
+    var formattedClockIn: String {
+        AppDateFormatter.formatDateTime(clockInTimestamp)
+    }
+
+    var formattedClockOut: String? {
+        clockOutTimestamp.map { AppDateFormatter.formatDateTime($0) }
+    }
 }
 
 

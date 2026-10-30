@@ -337,8 +337,8 @@ struct ExpensesView: View {
                             .background(Color(uiColor: .tertiarySystemFill))
                             .cornerRadius(4)
 
-                        if let dateStr = claim.receiptCapturedAt {
-                            Text(dateStr.prefix(10))
+                        if claim.receiptCapturedAt != nil {
+                            Text(claim.formattedCapturedDate)
                                 .font(.appCaption)
                                 .foregroundColor(.secondary)
                         }

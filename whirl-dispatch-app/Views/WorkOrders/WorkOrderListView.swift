@@ -439,7 +439,7 @@ struct WorkOrderListView: View {
                         .font(.caption2)
                         .foregroundColor(.secondary)
 
-                    Text(formatScheduledTime(order.scheduledStartTime))
+                    Text(order.formattedScheduledStartTime)
                         .font(.appCaption)
                         .foregroundColor(.secondary)
                 }
@@ -759,16 +759,5 @@ struct WorkOrderListView: View {
         let cleaned = raw.filter("0123456789+".contains)
         guard !cleaned.isEmpty, let url = URL(string: "tel://\(cleaned)"), UIApplication.shared.canOpenURL(url) else { return }
         UIApplication.shared.open(url)
-    }
-
-    // scheduled timestamp formatter
-    private func formatScheduledTime(_ isoString: String) -> String {
-        let isoFormatter = ISO8601DateFormatter()
-        if let date = isoFormatter.date(from: isoString) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.dateFormat = "MMM d, h:mm a"
-            return displayFormatter.string(from: date)
-        }
-        return isoString
     }
 }
