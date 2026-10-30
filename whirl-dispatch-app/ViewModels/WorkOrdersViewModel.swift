@@ -23,6 +23,7 @@ enum WorkOrderFilter: String, CaseIterable, Identifiable {
 @MainActor
 final class WorkOrdersViewModel {
     var workOrders: [WorkOrder] = []
+    var countsByFilter: WorkOrderFilterCounts? = nil
     var selectedFilter: WorkOrderFilter = .all
     var isLoading: Bool = false
     var isOffline: Bool = false
@@ -93,6 +94,7 @@ final class WorkOrdersViewModel {
 
         let result = await repository.fetchWorkOrders()
         self.workOrders = result.orders
+        self.countsByFilter = result.counts
         self.isOffline = result.isOffline
         self.errorMessage = result.error
         self.isLoading = false
@@ -117,13 +119,13 @@ final class WorkOrdersViewModel {
     func count(for filter: WorkOrderFilter) -> Int {
         switch filter {
         case .all:
-            return workOrders.count
+            return countsByFilter?.all ?? workOrders.count
         case .emergency:
-            return workOrders.filter { $0.priority == .criticalEmergency }.count
+            return countsByFilter?.emergency ?? workOrders.filter { $0.priority == .criticalEmergency }.count
         case .active:
-            return workOrders.filter { $0.status == .onSiteActive || $0.status == .enRoute }.count
+            return countsByFilter?.active ?? workOrders.filter { $0.status == .onSiteActive || $0.status == .enRoute }.count
         case .completed:
-            return workOrders.filter { $0.status == .completed || $0.status == .billed }.count
+            return countsByFilter?.completed ?? workOrders.filter { $0.status == .completed || $0.status == .billed }.count
         }
     }
 }

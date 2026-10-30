@@ -255,4 +255,24 @@ struct whirl_dispatch_appTests {
             #expect(page3.isEmpty)
         }
     }
+
+    @Test func testWorkOrderFilterCountsServerAggregation() async throws {
+        let vm = await WorkOrdersViewModel()
+        let supVM = await SupervisorViewModel()
+
+        await MainActor.run {
+            // When countsByFilter is set from server response
+            let serverCounts = WorkOrderFilterCounts(all: 15, emergency: 4, active: 3, completed: 8)
+            vm.countsByFilter = serverCounts
+            supVM.countsByFilter = serverCounts
+
+            #expect(vm.count(for: .all) == 15)
+            #expect(vm.count(for: .emergency) == 4)
+            #expect(vm.count(for: .active) == 3)
+            #expect(vm.count(for: .completed) == 8)
+
+            #expect(supVM.emergencyDispatchesCount == 4)
+            #expect(supVM.activeOnSiteCount == 3)
+        }
+    }
 }

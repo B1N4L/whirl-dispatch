@@ -355,3 +355,12 @@ struct WorkOrderExpensesResponse: Codable {
     let claims: [ExpenseClaim]
     let financialSummary: ExpenseFinancialSummary?
 }
+
+struct ActiveDispatchExpensesResponse: Codable {
+    let hasActiveDispatch: Bool
+    let workOrderId: String?
+    let workOrder: WorkOrder?
+    let claimsCount: Int
+    let claims: [ExpenseClaim]
+    let financialSummary: ExpenseFinancialSummary?
+}

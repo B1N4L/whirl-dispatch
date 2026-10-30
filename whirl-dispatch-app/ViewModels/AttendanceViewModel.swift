@@ -21,6 +21,7 @@ final class AttendanceViewModel {
     var selectedWorkOrder: WorkOrder? = nil
     var assignedWorkOrders: [WorkOrder] = []
     var attendanceHistory: [AttendanceRecord] = []
+    var todayHistoricalBillableSeconds: Int = 0
 
     var isLoading: Bool = false
     var errorMessage: String? = nil
@@ -63,12 +64,18 @@ final class AttendanceViewModel {
         return String(format: "%02d:%02d", minutes, seconds)
     }
 
-    // tally of total billable hours today
+    // total billable hours today leveraging server calculation with offline fallback
+    var todayTotalHours: Double {
+        let historical = max(
+            Double(todayHistoricalBillableSeconds),
+            Double(attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds })
+        )
+        let total = historical + (isClockedIn ? Double(elapsedSeconds) : 0)
+        return total / 3600.0
+    }
+
     var todayTotalHoursText: String {
-        let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
-        let total = historicalSeconds + (isClockedIn ? elapsedSeconds : 0)
-        let hours = Double(total) / 3600.0
-        return String(format: "%.1f hrs", hours)
+        String(format: "%.1f hrs", todayTotalHours)
     }
 
     // testing simulation states
@@ -98,21 +105,26 @@ final class AttendanceViewModel {
         isLoading = true
         errorMessage = nil
 
-        // load dispatches to determine active workplace site (single active dispatch model)
-        let (orders, _, _) = await WorkOrderRepository.shared.fetchWorkOrders()
-        let activeOrders = orders.filter {
-            $0.status == .onSiteActive || $0.status == .unacknowledgedBreak || $0.status == .awaitingPartsApproval || $0.status == .enRoute || $0.status == .dispatched
-        }
-        self.assignedWorkOrders = activeOrders
-
-        if !isClockedIn || selectedWorkOrder == nil {
-            // prioritize in-progress active work order, then first dispatched
-            if let active = activeOrders.first(where: {
-                $0.status == .onSiteActive || $0.status == .unacknowledgedBreak || $0.status == .awaitingPartsApproval || $0.status == .enRoute
-            }) {
+        // load active dispatch directly from backend
+        if !offlineManager.isPlantRoomOffline {
+            if let activeRes: ActiveWorkOrderResponse = try? await apiService.send(.getActiveWorkOrder),
+               activeRes.hasActiveDispatch,
+               let active = activeRes.workOrder {
                 self.selectedWorkOrder = active
-            } else {
-                self.selectedWorkOrder = activeOrders.first(where: { $0.status == .dispatched })
+                self.assignedWorkOrders = [active]
+            } else if !isClockedIn {
+                self.selectedWorkOrder = nil
+                self.assignedWorkOrders = []
+            }
+        } else {
+            // offline fallback: fetch from cached work orders
+            let cached = await offlineStorage.fetchCachedWorkOrders()
+            let activeCached = cached.filter {
+                $0.status == .onSiteActive || $0.status == .unacknowledgedBreak || $0.status == .awaitingPartsApproval || $0.status == .enRoute || $0.status == .dispatched
+            }
+            self.assignedWorkOrders = activeCached
+            if self.selectedWorkOrder == nil {
+                self.selectedWorkOrder = activeCached.first
             }
         }
 
@@ -124,13 +136,19 @@ final class AttendanceViewModel {
             do {
                 let currentRes: CurrentAttendanceResponse = try await apiService.send(.getCurrentAttendance)
                 remoteCheckCompleted = true
+                if let histSeconds = currentRes.todayHistoricalBillableSeconds {
+                    self.todayHistoricalBillableSeconds = histSeconds
+                }
                 if currentRes.active, let active = currentRes.session {
                     self.currentSession = active
                     self.isClockedIn = true
                     self.isOnBreak = (active.sessionStatus == .onBreakViolation)
 
-                    if let matchingOrder = orders.first(where: { $0.id == active.workOrderId }) {
-                        self.selectedWorkOrder = matchingOrder
+                    if selectedWorkOrder == nil || selectedWorkOrder?.id != active.workOrderId {
+                        if let orderRes: WorkOrderDetailResponse = try? await apiService.send(.getWorkOrderDetail(id: active.workOrderId)) {
+                            self.selectedWorkOrder = orderRes.workOrder
+                            self.assignedWorkOrders = [orderRes.workOrder]
+                        }
                     }
 
                     if let clockInDate = ISO8601DateFormatter().date(from: active.clockInTimestamp) {
@@ -166,7 +184,7 @@ final class AttendanceViewModel {
                 self.isClockedIn = true
                 self.isOnBreak = (activeCached.sessionStatus == .onBreakViolation)
 
-                if let matchingOrder = orders.first(where: { $0.id == activeCached.workOrderId }) {
+                if let matchingOrder = assignedWorkOrders.first(where: { $0.id == activeCached.workOrderId }) {
                     self.selectedWorkOrder = matchingOrder
                 }
 
@@ -415,6 +433,7 @@ final class AttendanceViewModel {
                 self.attendanceHistory.insert(session, at: 0)
             }
 
+            self.todayHistoricalBillableSeconds += elapsedSeconds
             self.isClockedIn = false
             self.isOnBreak = false
             self.currentSession = nil
@@ -422,14 +441,7 @@ final class AttendanceViewModel {
             self.breakSeconds = 0
             stopTimer()
             LocationTelemetryService.shared.stopTracking()
-            let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
-            let hours = Double(historicalSeconds) / 3600.0
-            WidgetSyncManager.shared.syncClockOut(
-                todayTotalHours: hours,
-                workOrderNumber: selectedWorkOrder?.workOrderNumber,
-                workOrderTitle: selectedWorkOrder?.title,
-                facilityName: selectedWorkOrder?.facility?.facilityName
-            )
+            syncClockOutWidget()
             isLoading = false
             return true
         }
@@ -438,6 +450,7 @@ final class AttendanceViewModel {
             let res: ClockOutResponse = try await apiService.send(.clockOut(workOrderId: targetWorkOrderId, lat: lat, lng: lng))
             self.attendanceHistory.insert(res.session, at: 0)
             await offlineStorage.upsertAttendance(res.session, isSyncPending: false)
+            self.todayHistoricalBillableSeconds += elapsedSeconds
             self.isClockedIn = false
             self.isOnBreak = false
             self.currentSession = nil
@@ -445,14 +458,7 @@ final class AttendanceViewModel {
             self.breakSeconds = 0
             stopTimer()
             LocationTelemetryService.shared.stopTracking()
-            let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
-            let hours = Double(historicalSeconds) / 3600.0
-            WidgetSyncManager.shared.syncClockOut(
-                todayTotalHours: hours,
-                workOrderNumber: selectedWorkOrder?.workOrderNumber,
-                workOrderTitle: selectedWorkOrder?.title,
-                facilityName: selectedWorkOrder?.facility?.facilityName
-            )
+            syncClockOutWidget()
             isLoading = false
             return true
         } catch let apiErr as APIError {
@@ -467,14 +473,7 @@ final class AttendanceViewModel {
                 self.breakSeconds = 0
                 stopTimer()
                 LocationTelemetryService.shared.stopTracking()
-                let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
-                let hours = Double(historicalSeconds) / 3600.0
-                WidgetSyncManager.shared.syncClockOut(
-                    todayTotalHours: hours,
-                    workOrderNumber: selectedWorkOrder?.workOrderNumber,
-                    workOrderTitle: selectedWorkOrder?.title,
-                    facilityName: selectedWorkOrder?.facility?.facilityName
-                )
+                syncClockOutWidget()
                 isLoading = false
                 errorMessage = "Shift was already closed or not active on the server. Local shift timer has been reset."
                 return true
@@ -513,9 +512,6 @@ final class AttendanceViewModel {
     // sync shift state to home screen widget
     func syncWidgetState() {
         let clockInDate: Date? = isClockedIn ? currentSession.flatMap { ISO8601DateFormatter().date(from: $0.clockInTimestamp) } : nil
-        let historicalSeconds = attendanceHistory.reduce(0) { $0 + $1.totalBillableSeconds }
-        let total = historicalSeconds + (isClockedIn ? elapsedSeconds : 0)
-        let hours = Double(total) / 3600.0
 
         WidgetSyncManager.shared.syncShift(
             isClockedIn: isClockedIn,
@@ -525,7 +521,16 @@ final class AttendanceViewModel {
             workOrderNumber: selectedWorkOrder?.workOrderNumber,
             workOrderTitle: selectedWorkOrder?.title,
             facilityName: selectedWorkOrder?.facility?.facilityName,
-            todayTotalHours: hours
+            todayTotalHours: todayTotalHours
+        )
+    }
+
+    private func syncClockOutWidget() {
+        WidgetSyncManager.shared.syncClockOut(
+            todayTotalHours: todayTotalHours,
+            workOrderNumber: selectedWorkOrder?.workOrderNumber,
+            workOrderTitle: selectedWorkOrder?.title,
+            facilityName: selectedWorkOrder?.facility?.facilityName
         )
     }
 

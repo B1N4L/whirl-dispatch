@@ -23,17 +23,19 @@ final class WorkOrderRepository: @unchecked Sendable {
 
 
     // try remote fetch first, fallback to core data if plant room basement has no signal or offline mode is engaged
-    func fetchWorkOrders() async -> (orders: [WorkOrder], isOffline: Bool, error: String?) {
+    func fetchWorkOrders() async -> (orders: [WorkOrder], counts: WorkOrderFilterCounts?, isOffline: Bool, error: String?) {
       if OfflineModeManager.shared.isPlantRoomOffline {
           let cachedOrders = await offlineStorage.fetchCachedWorkOrders()
-          return (cachedOrders, true, nil)
+          return (cachedOrders, nil, true, nil)
       }
 
       do {
           // decode envelope wrapper or direct array if returned
           let remoteOrders: [WorkOrder]
+          var counts: WorkOrderFilterCounts? = nil
           if let wrapper: WorkOrdersResponse = try? await apiService.send(.getWorkOrders) {
               remoteOrders = wrapper.workOrders
+              counts = wrapper.countsByFilter
           } else {
               remoteOrders = try await apiService.send(.getWorkOrders)
           }
@@ -41,16 +43,16 @@ final class WorkOrderRepository: @unchecked Sendable {
           // cache in background for offline use later
           await offlineStorage.upsertWorkOrders(remoteOrders)
 
-          return (remoteOrders, false, nil)
+          return (remoteOrders, counts, false, nil)
       } catch {
           // network failed, attempt local core data cache recovery
           let cachedOrders = await offlineStorage.fetchCachedWorkOrders()
 
           if !cachedOrders.isEmpty {
-              return (cachedOrders, true, nil)
+              return (cachedOrders, nil, true, nil)
           }
 
-          return ([], true, "Network unreachable and no offline cache available.")
+          return ([], nil, true, "Network unreachable and no offline cache available.")
       }
     }
 

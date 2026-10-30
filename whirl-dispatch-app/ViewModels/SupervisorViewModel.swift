@@ -111,6 +111,7 @@ struct TechnicianMember: Identifiable, Equatable, Hashable {
 @MainActor
 final class SupervisorViewModel {
     var workOrders: [WorkOrder] = []
+    var countsByFilter: WorkOrderFilterCounts? = nil
     var selectedWorkOrder: WorkOrder? = nil
     var selectedFilter: WorkOrderFilter = .all
     var technicians: [TechnicianMember] = []
@@ -144,7 +145,6 @@ final class SupervisorViewModel {
     ) {
         self.apiService = apiService ?? .shared
         self.repository = repository ?? .shared
-        setupInitialTeamRoster()
     }
 
     // tracked sites filtered by status and search query
@@ -271,11 +271,11 @@ final class SupervisorViewModel {
 
     // command center key figures
     var activeOnSiteCount: Int {
-        workOrders.filter { $0.status == .onSiteActive }.count
+        countsByFilter?.active ?? workOrders.filter { $0.status == .onSiteActive }.count
     }
 
     var emergencyDispatchesCount: Int {
-        workOrders.filter { $0.priority == .criticalEmergency }.count
+        countsByFilter?.emergency ?? workOrders.filter { $0.priority == .criticalEmergency }.count
     }
 
     var onShiftTechsCount: Int {
@@ -294,8 +294,9 @@ final class SupervisorViewModel {
         async let techsTask: TechniciansResponse? = try? apiService.send(.getTechnicians)
         async let trackingTask: FleetTrackingResponse? = try? apiService.send(.getFleetTracking)
 
-        let ((orders, _, _), facilitiesRes, fleetRes, techsRes, trackingRes) = await (ordersTask, facilitiesTask, fleetTask, techsTask, trackingTask)
-        self.workOrders = orders
+        let (ordersResult, facilitiesRes, fleetRes, techsRes, trackingRes) = await (ordersTask, facilitiesTask, fleetTask, techsTask, trackingTask)
+        self.workOrders = ordersResult.orders
+        self.countsByFilter = ordersResult.counts
 
         if let facs = facilitiesRes?.facilities, !facs.isEmpty {
             self.facilities = facs
@@ -319,92 +320,22 @@ final class SupervisorViewModel {
                 self.selectedTrackedSite = tracking.first
             }
         } else {
-            // Synthesize from active uncompleted dispatches if tracking endpoint is unreachable
-            let activeOrders = orders.filter { $0.status != .completed && $0.status != .billed && $0.status != .cancelled }
-            let synthesized = activeOrders.compactMap { order -> TrackedSite? in
-                guard let fac = order.facility else { return nil }
-                let leadMember = technicians.first(where: { $0.id == order.leadTechnicianId })
-                let leadTech = TrackedTechnician(
-                    id: order.leadTechnicianId,
-                    fullName: leadMember?.name ?? "Lead Technician",
-                    email: "lead@whirldispatch.com",
-                    phone: leadMember?.contactNumber ?? "+94 77 123 4567",
-                    role: "Lead Technician"
-                )
-                let trackedFac = TrackedFacility(
-                    id: fac.id,
-                    companyName: fac.companyName,
-                    facilityName: fac.facilityName,
-                    address: fac.address,
-                    latitude: fac.latitude,
-                    longitude: fac.longitude,
-                    geofenceRadius: fac.geofenceRadius,
-                    contactPersonName: fac.contactPersonName,
-                    contactPhone: fac.contactPhone,
-                    slaResponseHours: fac.slaResponseHours
-                )
-                let isOnSite = (order.status == .onSiteActive)
-                let tele = SiteTelemetry(
-                    latitude: fac.latitude,
-                    longitude: fac.longitude,
-                    isInsideGeofence: isOnSite,
-                    distanceToFacilityMeters: isOnSite ? 15.0 : 1800.0,
-                    formattedDistance: isOnSite ? "15m" : "1.8km",
-                    lastPingTimestamp: ISO8601DateFormatter().string(from: Date())
-                )
-                return TrackedSite(
-                    workOrderId: order.id,
-                    workOrderNumber: order.workOrderNumber,
-                    title: order.title,
-                    description: order.description,
-                    status: order.status,
-                    priority: order.priority,
-                    scheduledStartTime: order.scheduledStartTime,
-                    scheduledEndTime: order.scheduledEndTime,
-                    facility: trackedFac,
-                    team: TrackedTeam(leadTechnician: leadTech, crew: [], totalHeadcount: 1),
-                    vehicle: order.fleetAsset,
-                    telemetry: tele
-                )
-            }
-            self.trackedSites = synthesized
-            if selectedTrackedSite == nil {
-                self.selectedTrackedSite = synthesized.first
-            }
+            self.trackedSites = []
+            self.selectedTrackedSite = nil
         }
 
         if selectedWorkOrder == nil {
-            self.selectedWorkOrder = orders.first
+            self.selectedWorkOrder = workOrders.first
         }
 
-        // load claims across dispatches for approval queue directly via GET /api/expenses
-        var claims: [ExpenseClaim] = []
+        // load claims across dispatches directly via GET /api/expenses
         if let listRes: ExpenseListResponse = try? await apiService.send(.getExpenses) {
-            claims = listRes.expenses
-        } else {
-            // fallback across recent dispatches
-            for order in orders.prefix(8) {
-                if let res: WorkOrderExpensesResponse = try? await apiService.send(.getExpensesByWorkOrder(workOrderId: order.id)) {
-                    claims.append(contentsOf: res.claims)
-                }
+            self.pendingExpenses = listRes.expenses
+            if let currentId = selectedExpense?.id, let refreshed = listRes.expenses.first(where: { $0.id == currentId }) {
+                self.selectedExpense = refreshed
+            } else if selectedExpense == nil {
+                self.selectedExpense = listRes.expenses.first(where: { $0.approvalStatus == .pending }) ?? listRes.expenses.first
             }
-        }
-
-        // deduplicate claims
-        var seen = Set<String>()
-        var unique: [ExpenseClaim] = []
-        for c in claims {
-            if !seen.contains(c.id) {
-                seen.insert(c.id)
-                unique.append(c)
-            }
-        }
-
-        self.pendingExpenses = unique
-        if let currentId = selectedExpense?.id, let refreshed = unique.first(where: { $0.id == currentId }) {
-            self.selectedExpense = refreshed
-        } else if selectedExpense == nil {
-            self.selectedExpense = unique.first(where: { $0.approvalStatus == .pending }) ?? unique.first
         }
 
         isLoading = false
@@ -596,110 +527,5 @@ final class SupervisorViewModel {
             facilityName: item.facilityName ?? (item.isAvailable ? "Central Operations Base" : "Commercial Site"),
             facilityAddress: item.facilityAddress
         )
-    }
-
-    // initial roster matching coursework scenario
-    private func setupInitialTeamRoster() {
-        self.technicians = [
-            TechnicianMember(
-                id: "tech-01",
-                name: "Nuwan Silva",
-                email: "nuwan.tech@whirldispatch.com",
-                role: .technician,
-                roleTitle: "Senior HVAC Field Tech",
-                status: .onSite,
-                hourlyRate: AppCurrency.formatRate(90.0),
-                biometricEnrolled: true,
-                contactNumber: "+94 77 123 4567",
-                lastSeenText: "Plant Room B2 (5m ago)",
-                activeWorkOrderId: "wo-mock-01",
-                activeWorkOrderNumber: "WO-2026-4401",
-                activeWorkOrderTitle: "Main Chiller Compressor Overhaul",
-                activeWorkOrderDescription: "High-pressure centrifugal chiller stage 2 diagnostics and refrigerant line seal restoration.",
-                activeWorkOrderPriority: "CRITICAL_EMERGENCY",
-                activeWorkOrderStatus: "ON_SITE_ACTIVE",
-                activeWorkOrderScheduledStart: "2026-10-29T08:00:00Z",
-                activeWorkOrderScheduledEnd: "2026-10-29T16:00:00Z",
-                isLeadOnActiveJob: false,
-                companyName: "Commercial Retail REIT",
-                facilityName: "Metro Commercial Center",
-                facilityAddress: "No. 12 Galle Road, Colombo 03"
-            ),
-            TechnicianMember(
-                id: "tech-02",
-                name: "Kasun Perera",
-                email: "kasun.lead@whirldispatch.com",
-                role: .leadTechnician,
-                roleTitle: "Lead Technician",
-                status: .enRoute,
-                hourlyRate: AppCurrency.formatRate(105.0),
-                biometricEnrolled: true,
-                contactNumber: "+94 71 987 6543",
-                lastSeenText: "En Route on Baseline Rd",
-                activeWorkOrderId: "wo-mock-02",
-                activeWorkOrderNumber: "WO-2026-4402",
-                activeWorkOrderTitle: "Rooftop AHU Filter Replacement",
-                activeWorkOrderDescription: "Cleanroom grade HEPA filtration replenishment and airflow damper recalibration.",
-                activeWorkOrderPriority: "STANDARD",
-                activeWorkOrderStatus: "EN_ROUTE",
-                activeWorkOrderScheduledStart: "2026-10-29T10:00:00Z",
-                activeWorkOrderScheduledEnd: "2026-10-29T15:00:00Z",
-                isLeadOnActiveJob: true,
-                companyName: "Apex Medical Holdings",
-                facilityName: "Apex Healthcare Tower",
-                facilityAddress: "45 Baseline Road, Colombo 08"
-            ),
-            TechnicianMember(
-                id: "tech-03",
-                name: "Dinesh Fernando",
-                email: "dinesh.tech@whirldispatch.com",
-                role: .technician,
-                roleTitle: "Field Technician",
-                status: .available,
-                hourlyRate: AppCurrency.formatRate(85.0),
-                biometricEnrolled: true,
-                contactNumber: "+94 76 555 1212",
-                lastSeenText: "Ready for Dispatch",
-                activeWorkOrderId: nil,
-                activeWorkOrderNumber: nil,
-                activeWorkOrderTitle: nil,
-                activeWorkOrderDescription: nil,
-                activeWorkOrderPriority: nil,
-                activeWorkOrderStatus: nil,
-                activeWorkOrderScheduledStart: nil,
-                activeWorkOrderScheduledEnd: nil,
-                isLeadOnActiveJob: nil,
-                companyName: nil,
-                facilityName: "Central Operations Base",
-                facilityAddress: "HQ Dispatch Bay 3, Colombo 01"
-            ),
-            TechnicianMember(
-                id: "tech-04",
-                name: "Malik Jayasuriya",
-                email: "malik.tech@whirldispatch.com",
-                role: .technician,
-                roleTitle: "Apprentice Tech",
-                status: .onSite,
-                hourlyRate: AppCurrency.formatRate(65.0),
-                biometricEnrolled: true,
-                contactNumber: "+94 70 444 8989",
-                lastSeenText: "Plant Room B2",
-                activeWorkOrderId: "wo-mock-01",
-                activeWorkOrderNumber: "WO-2026-4401",
-                activeWorkOrderTitle: "Main Chiller Compressor Overhaul",
-                activeWorkOrderDescription: "High-pressure centrifugal chiller stage 2 diagnostics and refrigerant line seal restoration.",
-                activeWorkOrderPriority: "CRITICAL_EMERGENCY",
-                activeWorkOrderStatus: "ON_SITE_ACTIVE",
-                activeWorkOrderScheduledStart: "2026-10-29T08:00:00Z",
-                activeWorkOrderScheduledEnd: "2026-10-29T16:00:00Z",
-                isLeadOnActiveJob: false,
-                companyName: "Commercial Retail REIT",
-                facilityName: "Metro Commercial Center",
-                facilityAddress: "No. 12 Galle Road, Colombo 03"
-            )
-        ]
-        if selectedTechnician == nil {
-            self.selectedTechnician = technicians.first
-        }
     }
 }

@@ -25,6 +25,7 @@ final class ExpensesViewModel {
     var claims: [ExpenseClaim] = []
     var assignedWorkOrders: [WorkOrder] = []
     var selectedFilter: ExpenseFilter = .all
+    var financialSummary: ExpenseFinancialSummary? = nil
 
     var isLoading: Bool = false
     var errorMessage: String? = nil
@@ -43,14 +44,9 @@ final class ExpensesViewModel {
     }
 
 
-    // single active dispatch resolution
+    // single active dispatch resolution directly backed by backend
     var currentDispatch: WorkOrder? {
-        if let active = assignedWorkOrders.first(where: {
-            $0.status == .onSiteActive || $0.status == .unacknowledgedBreak || $0.status == .awaitingPartsApproval || $0.status == .enRoute
-        }) {
-            return active
-        }
-        return assignedWorkOrders.first(where: { $0.status == .dispatched })
+        assignedWorkOrders.first
     }
 
     // filtered list for current selection
@@ -67,29 +63,35 @@ final class ExpensesViewModel {
       }
     }
 
-    // tally metrics
+    // tally metrics leveraging server summary with offline fallback
     var totalClaimedAmount: Double {
-        claims.reduce(0.0) { acc, claim in
+        if let summary = financialSummary {
+            return summary.totalClaimedAmount
+        }
+        return claims.reduce(0.0) { acc, claim in
             acc + (Double(claim.totalAmount) ?? 0.0)
         }
     }
 
     var totalApprovedAmount: Double {
-        claims.filter { $0.approvalStatus == .approved }.reduce(0.0) { acc, claim in
+        if let summary = financialSummary {
+            return summary.totalApprovedAmount
+        }
+        return claims.filter { $0.approvalStatus == .approved }.reduce(0.0) { acc, claim in
             acc + (Double(claim.totalAmount) ?? 0.0)
         }
     }
 
     var pendingCount: Int {
-        claims.filter { $0.approvalStatus == .pending }.count
+        financialSummary?.pendingClaimsCount ?? claims.filter { $0.approvalStatus == .pending }.count
     }
 
     var approvedCount: Int {
-        claims.filter { $0.approvalStatus == .approved }.count
+        financialSummary?.approvedClaimsCount ?? claims.filter { $0.approvalStatus == .approved }.count
     }
 
     var rejectedCount: Int {
-        claims.filter { $0.approvalStatus == .rejected }.count
+        financialSummary?.rejectedClaimsCount ?? claims.filter { $0.approvalStatus == .rejected }.count
     }
 
     var formattedTotalClaimed: String {
@@ -101,24 +103,10 @@ final class ExpensesViewModel {
     }
 
 
-    // load work orders and their associated claims
+    // load active dispatch and its associated claims in a single server call
     func loadExpenses() async {
         isLoading = true
         errorMessage = nil
-
-        // 1. fetch dispatches and filter strictly to active dispatches
-        let (orders, _, _) = await WorkOrderRepository.shared.fetchWorkOrders()
-        let activeOrders = orders.filter {
-            $0.status == .onSiteActive || $0.status == .unacknowledgedBreak || $0.status == .awaitingPartsApproval || $0.status == .enRoute || $0.status == .dispatched
-        }
-        self.assignedWorkOrders = activeOrders
-
-        // 2. if no active dispatch assigned, clear claims and return
-        guard let dispatch = currentDispatch else {
-            self.claims = []
-            isLoading = false
-            return
-        }
 
         // if plant room offline mode is on, keep existing offline list
         if offlineManager.isPlantRoomOffline {
@@ -126,10 +114,17 @@ final class ExpensesViewModel {
             return
         }
 
-        // 3. fetch claims for current active dispatch from backend
         do {
-            let res: WorkOrderExpensesResponse = try await apiService.send(.getExpensesByWorkOrder(workOrderId: dispatch.id))
-            self.claims = res.claims
+            let res: ActiveDispatchExpensesResponse = try await apiService.send(.getActiveExpenses)
+            if res.hasActiveDispatch, let active = res.workOrder {
+                self.assignedWorkOrders = [active]
+                self.claims = res.claims
+                self.financialSummary = res.financialSummary
+            } else {
+                self.assignedWorkOrders = []
+                self.claims = []
+                self.financialSummary = nil
+            }
         } catch {
             if claims.isEmpty {
                 self.errorMessage = "Unable to fetch online expense claims for active dispatch."

@@ -212,7 +212,7 @@ struct SupervisorSplitView: View {
                 HStack(spacing: 6) {
                     FilterChip(
                         title: "All",
-                        count: viewModel.workOrders.count,
+                        count: viewModel.countsByFilter?.all ?? viewModel.workOrders.count,
                         isSelected: viewModel.selectedFilter == .all
                     ) {
                         viewModel.selectedFilter = .all
@@ -236,6 +236,7 @@ struct SupervisorSplitView: View {
 
                     FilterChip(
                         title: "Completed",
+                        count: viewModel.countsByFilter?.completed,
                         isSelected: viewModel.selectedFilter == .completed
                     ) {
                         viewModel.selectedFilter = .completed

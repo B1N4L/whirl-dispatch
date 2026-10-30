@@ -81,8 +81,19 @@ struct WorkOrder: Identifiable, Codable, Equatable, Hashable {
 
 
 // response wrappers for backend work order endpoints
+struct WorkOrderFilterCounts: Codable, Sendable {
+    let all: Int
+    let emergency: Int
+    let active: Int
+    let completed: Int
+}
+
 struct WorkOrdersResponse: Codable {
     let count: Int?
+    let totalCount: Int?
+    let totalPages: Int?
+    let page: Int?
+    let countsByFilter: WorkOrderFilterCounts?
     let workOrders: [WorkOrder]
 }
 
@@ -98,4 +109,9 @@ struct WorkOrderStatusUpdateResponse: Codable {
 struct WorkOrderCreateResponse: Codable {
     let message: String?
     let workOrder: WorkOrder
+}
+
+struct ActiveWorkOrderResponse: Codable {
+    let hasActiveDispatch: Bool
+    let workOrder: WorkOrder?
 }

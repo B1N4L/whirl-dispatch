@@ -150,7 +150,7 @@ struct WorkOrderListView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.caption2)
                         .foregroundColor(Color.statusGreen)
-                    Text("\(viewModel.completedHistory.count) Completed")
+                    Text("\(viewModel.countsByFilter?.completed ?? viewModel.completedHistory.count) Completed")
                         .font(.appCaption)
                         .fontWeight(.medium)
                         .foregroundColor(.secondary)
@@ -642,7 +642,7 @@ struct WorkOrderListView: View {
 
                 Spacer()
 
-                Text("\(viewModel.completedHistory.count) completed")
+                Text("\(viewModel.countsByFilter?.completed ?? viewModel.completedHistory.count) completed")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

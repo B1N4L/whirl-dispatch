@@ -26,6 +26,7 @@ enum APIEndpoint {
     case getFleet
     case getFleetTracking
     case getWorkOrders
+    case getActiveWorkOrder
     case getWorkOrderDetail(id: String)
     case updateWorkOrderStatus(id: String, status: String)
    case clockIn(workOrderId: String, lat: Double, lng: Double)
@@ -34,6 +35,7 @@ enum APIEndpoint {
    case getCurrentAttendance
    case getAttendanceHistory(workOrderId: String)
     case getExpenses
+    case getActiveExpenses
     case getExpensesByWorkOrder(workOrderId: String)
     case submitExpense(workOrderId: String, vendorName: String, receiptNumber: String?, currency: String, receiptImageUrl: String? = nil, lat: Double, lng: Double, items: [[String: Any]])
     case approveExpense(id: String, status: String, reason: String?)
@@ -69,6 +71,7 @@ enum APIEndpoint {
         case .getFleet: return "/fleet"
         case .getFleetTracking: return "/fleet/tracking"
         case .getWorkOrders: return "/work-orders"
+        case .getActiveWorkOrder: return "/work-orders/active"
         case .getWorkOrderDetail(let id): return "/work-orders/\(id)"
         case .updateWorkOrderStatus(let id, _): return "/work-orders/\(id)/status"
         case .clockIn: return "/attendance/clock-in"
@@ -77,6 +80,7 @@ enum APIEndpoint {
         case .getCurrentAttendance: return "/attendance/current"
         case .getAttendanceHistory(let workOrderId): return "/attendance/work-order/\(workOrderId)"
         case .getExpenses: return "/expenses"
+        case .getActiveExpenses: return "/expenses/active"
         case .getExpensesByWorkOrder(let workOrderId): return "/expenses/work-order/\(workOrderId)"
         case .submitExpense: return "/expenses"
         case .approveExpense(let id, _, _): return "/expenses/\(id)/review"
@@ -97,7 +101,7 @@ enum APIEndpoint {
 
     var method: HTTPMethod {
         switch self {
-        case .health, .getFacilities, .getFleet, .getFleetTracking, .getWorkOrders, .getWorkOrderDetail, .getExpenses, .getExpensesByWorkOrder, .getBillingInvoices, .getDashboardAnalytics, .getInvoice, .getAttendanceHistory, .getCurrentAttendance, .getTechnicians, .getEstimatePreview, .getTeamTelemetry:
+        case .health, .getFacilities, .getFleet, .getFleetTracking, .getWorkOrders, .getActiveWorkOrder, .getWorkOrderDetail, .getExpenses, .getActiveExpenses, .getExpensesByWorkOrder, .getBillingInvoices, .getDashboardAnalytics, .getInvoice, .getAttendanceHistory, .getCurrentAttendance, .getTechnicians, .getEstimatePreview, .getTeamTelemetry:
             return .get
         case .login, .clockIn, .clockOut, .pauseBreak, .submitExpense, .generateEstimate, .createWorkOrder, .changePassword, .sendTelemetry:
             return .post

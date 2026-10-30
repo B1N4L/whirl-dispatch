@@ -210,9 +210,9 @@ final class BillingViewModel {
         isLoading = true
         errorMessage = nil
 
-        let (orders, _, _) = await repository.fetchWorkOrders()
+        let result = await repository.fetchWorkOrders()
         // Payment clerks cannot bill in-progress work: only completed or billed orders are visible
-        let billableOrders = orders.filter { $0.status == .completed || $0.status == .billed }
+        let billableOrders = result.orders.filter { $0.status == .completed || $0.status == .billed }
         self.workOrders = billableOrders
 
         if let currentSelectedId = selectedWorkOrder?.id,
